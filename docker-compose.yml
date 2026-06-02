@@ -1,0 +1,65 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ims-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ims_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ims_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-investment_management}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ims_user} -d ${POSTGRES_DB:-investment_management}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  backend:
+    build:
+      context: ./backend/src/InvestmentManagement.Api
+      dockerfile: Dockerfile
+    container_name: ims-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "5000:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: ${ConnectionStrings__DefaultConnection:-Host=db;Port=5432;Database=investment_management;Username=ims_user;Password=ims_dev_password}
+      FeatureManagement__UseMockPayment: ${FeatureManagement__UseMockPayment:-true}
+      Jwt__Issuer: ${Jwt__Issuer:-InvestmentManagement}
+      Jwt__Audience: ${Jwt__Audience:-InvestmentManagement}
+      Jwt__SecretKey: ${Jwt__SecretKey:-InvestmentManagement_Dev_Secret_Key_32chars!}
+      Jwt__ExpirationMinutes: ${Jwt__ExpirationMinutes:-60}
+      Payment__ApiBaseUrl: ${Payment__ApiBaseUrl:-http://localhost:5000}
+      Payment__SuccessRedirectUrl: ${Payment__SuccessRedirectUrl:-http://localhost:3000/payment/success}
+      Payment__FailureRedirectUrl: ${Payment__FailureRedirectUrl:-http://localhost:3000/payment/failure}
+      Cors__AllowedOrigins__0: ${CORS_ORIGIN:-http://localhost:3000}
+
+  frontend-web:
+    build:
+      context: ./frontend-web
+      dockerfile: Dockerfile
+    container_name: ims-frontend-web
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend-web:/app
+      - /app/node_modules
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:5000}
+      VITE_HUB_URL: ${VITE_HUB_URL:-http://localhost:5000/hubs/investment}
+      VITE_IS_TESTING: ${VITE_IS_TESTING:-true}
+
+volumes:
+  pgdata:
