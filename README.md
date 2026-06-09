@@ -81,6 +81,266 @@ docker-compose.yml
 .env.example
 ```
 
+## Architecture & diagrams
+
+### System architecture
+
+End-to-end flow across clients, Docker services, and internal API components.
+
+```mermaid
+flowchart TB
+    subgraph Clients
+        Web["frontend-web<br/>React · Vite · Tailwind · Zustand"]
+        Mobile["frontend-mobile<br/>Expo · React Native · NativeWind"]
+    end
+
+    subgraph DockerCompose["Docker Compose"]
+        Web -->|REST + SignalR| API
+        Mobile -->|REST + SignalR| API
+        API["ims-backend<br/>.NET 10 Web API"]
+        API -->|EF Core| DB[(PostgreSQL 16<br/>ims-db)]
+    end
+
+    subgraph APIInternals["API internals"]
+        API --> Auth["JWT auth<br/>Admin · Company · Investor"]
+        API --> Controllers["REST controllers<br/>auth · admin · campaigns · bookings · payments · notifications"]
+        API --> Hub["SignalR InvestmentHub<br/>/hubs/investment"]
+        API --> Worker["BookingExpirationHostedService<br/>hourly · 3-day PreBooked expiry"]
+        Controllers --> Services["Domain services"]
+        Services --> Payment["IPaymentStrategy<br/>Mock or bKash"]
+        Payment --> SessionStore["In-memory payment sessions"]
+    end
+
+    subgraph Roles["User roles"]
+        Admin["Admin — approve companies, bKash profile"]
+        Company["Company — create campaigns, manage bookings"]
+        Investor["Investor — browse, book shares, notifications"]
+    end
+
+    Web --> Roles
+    Mobile --> Roles
+```
+
+| Layer | Technology |
+|-------|------------|
+| Backend | .NET 10, EF Core 10, ASP.NET Core SignalR |
+| Database | PostgreSQL 16 |
+| Web | React 19, Vite, TailwindCSS, Zustand, React Router, `@microsoft/signalr` |
+| Mobile | Expo, React Native, NativeWind, Zustand, React Navigation |
+| Containers | Docker Compose (`db`, `backend`, `frontend-web`) |
+
+### Entity-relationship diagram
+
+Five persisted tables. Payment sessions are held in memory only (not in the database).
+
+```mermaid
+erDiagram
+    User ||--o| CompanyProfile : "has when Company role"
+    User ||--o{ Booking : "invests as Investor"
+    CompanyProfile ||--o{ Campaign : "owns"
+    Campaign ||--o{ Booking : "receives"
+    User ||--o{ Notification : "receives"
+    Campaign ||--o{ Notification : "optional reference"
+
+    User {
+        uuid Id PK
+        string Email UK
+        string PasswordHash
+        enum Role "Admin | Company | Investor"
+        string BKashNumber "nullable, admin receiving number"
+    }
+
+    CompanyProfile {
+        uuid Id PK
+        uuid UserId FK UK
+        string DocumentationUrl
+        enum ApprovalStatus "Pending | Approved | Rejected"
+    }
+
+    Campaign {
+        uuid Id PK
+        uuid CompanyId FK
+        int TotalShares
+        int AvailableShares
+        decimal PricePerShare
+        decimal MinInvestmentThreshold
+        enum PaymentStatus "Pending | Paid"
+        string BKashTransactionId "nullable"
+        bool IsActive
+    }
+
+    Booking {
+        uuid Id PK
+        uuid InvestorId FK
+        uuid CampaignId FK
+        int ReservedShares
+        decimal TotalPrice
+        enum Status "PreBooked | Contacted | Confirmed | Cancelled | Returned"
+        datetime CreatedAt
+        datetime UpdatedAt
+    }
+
+    Notification {
+        uuid Id PK
+        uuid UserId FK
+        uuid CampaignId FK "nullable"
+        string Message
+        bool IsRead
+        datetime CreatedAt
+    }
+```
+
+**Relationships**
+
+| From | To | Cardinality | Notes |
+|------|----|-------------|-------|
+| User | CompanyProfile | 1:1 | Company role only; cascade delete |
+| User | Booking | 1:N | Investor role |
+| CompanyProfile | Campaign | 1:N | Company must be Approved to create |
+| Campaign | Booking | 1:N | Shares deducted on PreBooked |
+| User | Notification | 1:N | Cascade delete |
+| Campaign | Notification | 1:N | Optional; set null on campaign delete |
+
+**Booking status flow:** `PreBooked` → `Contacted` → `Confirmed` · `PreBooked`/`Contacted` → `Cancelled` · `Confirmed` → `Returned` (resell)
+
+### Sequence diagrams
+
+#### 1. Authentication and company onboarding
+
+```mermaid
+sequenceDiagram
+    actor Investor as Investor / Company
+    actor Admin
+    participant UI as Web / Mobile
+    participant API as Auth & Admin API
+    participant DB as PostgreSQL
+
+    Investor->>UI: Register
+    UI->>API: POST /api/auth/register/investor or /company
+    API->>DB: Create User (+ CompanyProfile if company, Pending)
+    API-->>UI: JWT + role
+
+    alt Company registration
+        Admin->>UI: Review pending companies
+        UI->>API: GET /api/admin/companies/pending
+        API->>DB: List Pending profiles
+        Admin->>UI: Approve or reject
+        UI->>API: POST /api/admin/companies/{id}/approve
+        API->>DB: ApprovalStatus = Approved | Rejected
+    end
+
+    Investor->>UI: Login
+    UI->>API: POST /api/auth/login
+    API->>DB: Verify credentials
+    API-->>UI: JWT (Bearer on subsequent requests)
+```
+
+#### 2. Campaign creation, payment, and activation
+
+Listing fee is **500 BDT**. Campaign stays inactive until payment is verified.
+
+```mermaid
+sequenceDiagram
+    actor Company
+    actor Investors
+    participant UI as Company UI
+    participant API as Campaigns & Payments API
+    participant Pay as IPaymentStrategy
+    participant DB as PostgreSQL
+    participant Hub as SignalR Hub
+
+    Company->>UI: Create campaign
+    UI->>API: POST /api/campaigns
+    API->>DB: Insert Campaign (PaymentStatus=Pending, IsActive=false)
+    API->>Pay: Initiate 500 BDT (reference: campaign:{id})
+    Pay-->>UI: transactionId + redirectUrl
+
+    Company->>Pay: Complete payment (mock callback or bKash simulate)
+    Company->>UI: Confirm payment
+    UI->>API: POST /api/campaigns/{id}/confirm-payment
+    API->>Pay: Verify transaction
+    API->>DB: PaymentStatus=Paid, IsActive=true
+    API->>DB: Insert Notification per investor
+    API->>Hub: CampaignActivated → Investors group
+    Hub-->>Investors: Real-time event (bell badge++)
+```
+
+Payment mode is controlled by `FeatureManagement__UseMockPayment`: **mock** auto-verifies via callback; **bKash** uses the simulated checkout page and admin `BKashNumber`.
+
+#### 3. Investor booking flow
+
+```mermaid
+sequenceDiagram
+    actor Investor
+    actor Company
+    participant UI as Investor / Company UI
+    participant API as Bookings API
+    participant DB as PostgreSQL
+    participant Worker as Expiration worker
+
+    Investor->>UI: Browse campaigns
+    UI->>API: GET /api/campaigns
+    API->>DB: Active paid campaigns
+    API-->>UI: Campaign list
+
+    Investor->>UI: Reserve shares (share calculator)
+    UI->>API: POST /api/bookings
+    API->>DB: SERIALIZABLE tx + row lock on Campaign
+    Note over API,DB: Max 3 active bookings · shares available · min threshold
+    API->>DB: Decrement AvailableShares, Status=PreBooked
+    API-->>UI: Booking created
+
+    Company->>UI: Update booking status
+    UI->>API: PATCH /api/bookings/{id}/status
+    API->>DB: PreBooked → Contacted → Confirmed
+
+    opt Investor cancels
+        Investor->>UI: Cancel booking
+        UI->>API: POST /api/bookings/{id}/cancel
+        API->>DB: Cancelled, restore AvailableShares
+    end
+
+    opt Auto-expire (hourly)
+        Worker->>DB: PreBooked older than 3 days → Cancelled
+        Worker->>DB: Restore AvailableShares
+    end
+
+    opt Resell confirmed shares
+        Investor->>UI: Return shares
+        UI->>API: POST /api/bookings/{id}/resell
+        API->>DB: Status=Returned, restore AvailableShares
+    end
+```
+
+#### 4. Notifications and SignalR
+
+```mermaid
+sequenceDiagram
+    participant UI as Web / Mobile
+    participant Hub as /hubs/investment
+    participant API as Notifications API
+    participant DB as PostgreSQL
+
+    UI->>Hub: Connect with JWT (?access_token=)
+    Note over Hub: Join role group: Investors · Companies · Admins
+
+    UI->>API: GET /api/notifications/unread-count
+    API->>DB: Count unread
+    API-->>UI: Unread count
+
+    Note over Hub,UI: On campaign activation
+    Hub-->>UI: CampaignActivated event
+    UI->>UI: Increment bell badge
+
+    UI->>API: GET /api/notifications
+    API->>DB: List user notifications
+    API-->>UI: Notification list
+
+    UI->>API: PATCH /api/notifications/{id}/read
+    UI->>API: POST /api/notifications/read-all
+    API->>DB: Mark read
+```
+
 ## Local EF migrations
 
 From `backend/src/InvestmentManagement.Api`:
