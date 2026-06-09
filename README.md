@@ -135,26 +135,26 @@ Five persisted tables. Payment sessions are held in memory only (not in the data
 
 ```mermaid
 erDiagram
-    User ||--o| CompanyProfile : "has when Company role"
-    User ||--o{ Booking : "invests as Investor"
-    CompanyProfile ||--o{ Campaign : "owns"
-    Campaign ||--o{ Booking : "receives"
-    User ||--o{ Notification : "receives"
-    Campaign ||--o{ Notification : "optional reference"
+    User ||--o| CompanyProfile : has
+    User ||--o{ Booking : invests
+    CompanyProfile ||--o{ Campaign : owns
+    Campaign ||--o{ Booking : receives
+    User ||--o{ Notification : receives
+    Campaign ||--o{ Notification : references
 
     User {
         uuid Id PK
         string Email UK
         string PasswordHash
-        enum Role "Admin | Company | Investor"
-        string BKashNumber "nullable, admin receiving number"
+        string Role
+        string BKashNumber
     }
 
     CompanyProfile {
         uuid Id PK
-        uuid UserId FK UK
+        uuid UserId FK
         string DocumentationUrl
-        enum ApprovalStatus "Pending | Approved | Rejected"
+        string ApprovalStatus
     }
 
     Campaign {
@@ -164,8 +164,8 @@ erDiagram
         int AvailableShares
         decimal PricePerShare
         decimal MinInvestmentThreshold
-        enum PaymentStatus "Pending | Paid"
-        string BKashTransactionId "nullable"
+        string PaymentStatus
+        string BKashTransactionId
         bool IsActive
     }
 
@@ -175,7 +175,7 @@ erDiagram
         uuid CampaignId FK
         int ReservedShares
         decimal TotalPrice
-        enum Status "PreBooked | Contacted | Confirmed | Cancelled | Returned"
+        string Status
         datetime CreatedAt
         datetime UpdatedAt
     }
@@ -183,7 +183,7 @@ erDiagram
     Notification {
         uuid Id PK
         uuid UserId FK
-        uuid CampaignId FK "nullable"
+        uuid CampaignId FK
         string Message
         bool IsRead
         datetime CreatedAt
@@ -200,6 +200,10 @@ erDiagram
 | Campaign | Booking | 1:N | Shares deducted on PreBooked |
 | User | Notification | 1:N | Cascade delete |
 | Campaign | Notification | 1:N | Optional; set null on campaign delete |
+
+**Enum fields (stored as strings):** `User.Role` — Admin, Company, Investor · `CompanyProfile.ApprovalStatus` — Pending, Approved, Rejected · `Campaign.PaymentStatus` — Pending, Paid · `Booking.Status` — PreBooked, Contacted, Confirmed, Cancelled, Returned
+
+**Nullable fields:** `User.BKashNumber`, `Campaign.BKashTransactionId`, `Notification.CampaignId` · `CompanyProfile.UserId` is unique (1:1 with User)
 
 **Booking status flow:** `PreBooked` → `Contacted` → `Confirmed` · `PreBooked`/`Contacted` → `Cancelled` · `Confirmed` → `Returned` (resell)
 
