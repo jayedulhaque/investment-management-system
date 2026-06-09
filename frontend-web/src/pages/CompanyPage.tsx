@@ -72,29 +72,48 @@ export function CompanyPage() {
       {message && <p className="rounded bg-blue-50 p-2 text-sm">{message}</p>}
 
       <section className="rounded-lg bg-white p-4 shadow">
-        <h2 className="mb-3 font-semibold">Create campaign (500 BDT fee)</h2>
-        <form onSubmit={createCampaign} className="grid gap-2 sm:grid-cols-3">
-          <input
-            type="number"
-            placeholder="Total shares"
-            className="rounded border px-2 py-1"
-            value={form.totalShares}
-            onChange={(e) => setForm({ ...form, totalShares: +e.target.value })}
-          />
-          <input
-            type="number"
-            placeholder="Price/share"
-            className="rounded border px-2 py-1"
-            value={form.pricePerShare}
-            onChange={(e) => setForm({ ...form, pricePerShare: +e.target.value })}
-          />
-          <input
-            type="number"
-            placeholder="Min investment"
-            className="rounded border px-2 py-1"
-            value={form.minInvestmentThreshold}
-            onChange={(e) => setForm({ ...form, minInvestmentThreshold: +e.target.value })}
-          />
+        <h2 className="mb-1 font-semibold">Create campaign</h2>
+        <p className="mb-4 text-sm text-slate-600">
+          A one-time <strong>500 BDT listing fee</strong> is charged when you submit (separate from the fields below).
+        </p>
+        <form onSubmit={createCampaign} className="grid gap-4 sm:grid-cols-3">
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium text-slate-700">Total shares</span>
+            <input
+              type="number"
+              min={1}
+              className="w-full rounded border px-2 py-1.5"
+              value={form.totalShares}
+              onChange={(e) => setForm({ ...form, totalShares: +e.target.value })}
+            />
+            <span className="mt-1 block text-xs text-slate-500">How many shares you are offering</span>
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium text-slate-700">Price per share (BDT)</span>
+            <input
+              type="number"
+              min={1}
+              step={0.01}
+              className="w-full rounded border px-2 py-1.5"
+              value={form.pricePerShare}
+              onChange={(e) => setForm({ ...form, pricePerShare: +e.target.value })}
+            />
+            <span className="mt-1 block text-xs text-slate-500">Cost of one share</span>
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium text-slate-700">Minimum investment (BDT)</span>
+            <input
+              type="number"
+              min={1}
+              step={0.01}
+              className="w-full rounded border px-2 py-1.5"
+              value={form.minInvestmentThreshold}
+              onChange={(e) => setForm({ ...form, minInvestmentThreshold: +e.target.value })}
+            />
+            <span className="mt-1 block text-xs text-slate-500">
+              Smallest order investors can place (shares × price)
+            </span>
+          </label>
           <button type="submit" className="rounded bg-indigo-600 px-4 py-2 text-white sm:col-span-3">
             Create & pay listing fee
           </button>
