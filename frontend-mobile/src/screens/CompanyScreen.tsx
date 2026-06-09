@@ -1,8 +1,33 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { apiFetch } from '../lib/api';
 import { PaymentPanel } from '../components/PaymentPanel';
 import { useAuthStore } from '../store/authStore';
+
+function FormField({
+  label,
+  hint,
+  value,
+  onChangeText,
+}: {
+  label: string;
+  hint: string;
+  value: string;
+  onChangeText: (v: string) => void;
+}) {
+  return (
+    <View className="mb-4">
+      <Text className="mb-1 font-medium text-slate-700">{label}</Text>
+      <TextInput
+        className="rounded border border-slate-300 bg-white p-2.5"
+        value={value}
+        onChangeText={onChangeText}
+        keyboardType="numeric"
+      />
+      <Text className="mt-1 text-xs text-slate-500">{hint}</Text>
+    </View>
+  );
+}
 
 export function CompanyScreen() {
   const logout = useAuthStore((s) => s.logout);
@@ -42,12 +67,33 @@ export function CompanyScreen() {
         <Text className="text-xl font-bold">Company</Text>
         <Pressable onPress={logout}><Text className="text-red-600">Logout</Text></Pressable>
       </View>
-      <Text className="font-semibold mb-2">New campaign</Text>
-      <TextInput className="bg-white border rounded p-2 mb-2" value={form.totalShares} onChangeText={(v) => setForm({ ...form, totalShares: v })} placeholder="Total shares" keyboardType="numeric" />
-      <TextInput className="bg-white border rounded p-2 mb-2" value={form.pricePerShare} onChangeText={(v) => setForm({ ...form, pricePerShare: v })} placeholder="Price/share" keyboardType="numeric" />
-      <Pressable className="bg-indigo-600 rounded py-3 mb-2" onPress={createCampaign}>
-        <Text className="text-white text-center">Create campaign</Text>
-      </Pressable>
+      <View className="mb-4 rounded-lg bg-white p-4 shadow-sm">
+        <Text className="mb-1 text-lg font-semibold">Create campaign</Text>
+        <Text className="mb-4 text-sm text-slate-600">
+          A one-time 500 BDT listing fee is charged when you submit (separate from the fields below).
+        </Text>
+        <FormField
+          label="Total shares"
+          hint="How many shares you are offering"
+          value={form.totalShares}
+          onChangeText={(v) => setForm({ ...form, totalShares: v })}
+        />
+        <FormField
+          label="Price per share (BDT)"
+          hint="Cost of one share"
+          value={form.pricePerShare}
+          onChangeText={(v) => setForm({ ...form, pricePerShare: v })}
+        />
+        <FormField
+          label="Minimum investment (BDT)"
+          hint="Smallest order investors can place (shares × price)"
+          value={form.minInvestmentThreshold}
+          onChangeText={(v) => setForm({ ...form, minInvestmentThreshold: v })}
+        />
+        <Pressable className="rounded bg-indigo-600 py-3" onPress={createCampaign}>
+          <Text className="text-center text-white font-medium">Create & pay listing fee</Text>
+        </Pressable>
+      </View>
       {pending && (
         <PaymentPanel
           amount={500}
