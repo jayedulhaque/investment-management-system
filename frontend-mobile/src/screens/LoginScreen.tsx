@@ -6,8 +6,9 @@ import type { RootStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
-export function LoginScreen({ navigation }: Props) {
+export function LoginScreen({ navigation, route }: Props) {
   const login = useAuthStore((s) => s.login);
+  const successMessage = route.params?.message;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +28,9 @@ export function LoginScreen({ navigation }: Props) {
   return (
     <View className="flex-1 justify-center p-6 bg-slate-100">
       <Text className="text-2xl font-bold mb-4">Login</Text>
+      {successMessage ? (
+        <Text className="mb-3 rounded bg-green-50 p-2 text-sm text-green-800">{successMessage}</Text>
+      ) : null}
       <TextInput className="bg-white border rounded p-3 mb-2" placeholder="Email" value={email} onChangeText={setEmail} autoCapitalize="none" />
       <TextInput className="bg-white border rounded p-3 mb-2" placeholder="Password" secureTextEntry value={password} onChangeText={setPassword} />
       {error && <Text className="text-red-600 mb-2">{error}</Text>}

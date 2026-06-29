@@ -4,6 +4,9 @@ namespace InvestmentManagement.Api.Contracts.Campaigns;
 
 public class CreateCampaignRequest
 {
+    [Range(0.01, 100)]
+    public decimal EquityPercentageOffered { get; set; }
+
     [Range(1, int.MaxValue)]
     public int TotalShares { get; set; }
 

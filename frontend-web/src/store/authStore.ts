@@ -7,7 +7,9 @@ import {
   getStoredUser,
   persistAuth,
   type AuthUser,
+  type RegisterCompanyResponse,
 } from '../lib/api';
+import type { CompanyRegistrationInfo } from '../types/company';
 
 type AuthState = {
   user: AuthUser | null;
@@ -16,7 +18,7 @@ type AuthState = {
   hydrate: () => void;
   login: (email: string, password: string) => Promise<void>;
   registerInvestor: (email: string, password: string) => Promise<void>;
-  registerCompany: (email: string, password: string, documentationUrl: string) => Promise<void>;
+  registerCompany: (email: string, password: string, company: CompanyRegistrationInfo) => Promise<RegisterCompanyResponse>;
   logout: () => void;
 };
 
@@ -51,13 +53,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ user: getStoredUser(), token: res.accessToken });
   },
 
-  registerCompany: async (email, password, documentationUrl) => {
-    const res = await apiFetch<AuthResponse>('/api/auth/register/company', {
+  registerCompany: async (email, password, company) => {
+    return apiFetch<RegisterCompanyResponse>('/api/auth/register/company', {
       method: 'POST',
-      body: JSON.stringify({ email, password, documentationUrl }),
+      body: JSON.stringify({ email, password, ...company }),
     });
-    persistAuth(res);
-    set({ user: getStoredUser(), token: res.accessToken });
   },
 
   logout: () => {

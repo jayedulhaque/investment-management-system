@@ -1,11 +1,10 @@
-using InvestmentManagement.Api.Domain.Enums;
+namespace InvestmentManagement.Api.Contracts.Admin;
 
-namespace InvestmentManagement.Api.Domain.Entities;
-
-public class CompanyProfile
+public class ApprovedCompanyResponse
 {
-    public Guid Id { get; set; }
+    public Guid CompanyProfileId { get; set; }
     public Guid UserId { get; set; }
+    public string Email { get; set; } = string.Empty;
     public string CompanyName { get; set; } = string.Empty;
     public string? LegalName { get; set; }
     public string? RegistrationNumber { get; set; }
@@ -18,8 +17,5 @@ public class CompanyProfile
     public string? Country { get; set; }
     public string? Industry { get; set; }
     public string DocumentationUrl { get; set; } = string.Empty;
-    public ApprovalStatus ApprovalStatus { get; set; } = ApprovalStatus.Pending;
-
-    public User User { get; set; } = null!;
-    public ICollection<Campaign> Campaigns { get; set; } = new List<Campaign>();
+    public string ApprovalStatus { get; set; } = string.Empty;
 }

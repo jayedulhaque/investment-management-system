@@ -1,5 +1,5 @@
 export type RootStackParamList = {
-  Login: undefined;
+  Login: { message?: string } | undefined;
   Register: undefined;
   Investor: undefined;
   Company: undefined;

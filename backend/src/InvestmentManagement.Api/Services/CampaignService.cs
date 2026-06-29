@@ -27,10 +27,15 @@ public class CampaignService(
         if (profile.ApprovalStatus != ApprovalStatus.Approved)
             throw new InvalidOperationException("Company must be approved before creating campaigns.");
 
+        var hasCampaign = await db.Campaigns.AnyAsync(c => c.CompanyId == profile.Id, cancellationToken);
+        if (hasCampaign)
+            throw new InvalidOperationException("A company can only have one campaign.");
+
         var campaign = new Campaign
         {
             Id = Guid.NewGuid(),
             CompanyId = profile.Id,
+            EquityPercentageOffered = request.EquityPercentageOffered,
             TotalShares = request.TotalShares,
             AvailableShares = request.TotalShares,
             PricePerShare = request.PricePerShare,
@@ -53,7 +58,7 @@ public class CampaignService(
 
         return new CreateCampaignResponse
         {
-            Campaign = MapCampaign(campaign),
+            Campaign = MapCampaign(campaign, profile.CompanyName),
             Payment = payment
         };
     }
@@ -88,29 +93,71 @@ public class CampaignService(
 
     public async Task<IReadOnlyList<CampaignResponse>> GetActiveCampaignsAsync(CancellationToken cancellationToken = default)
     {
-        return await db.Campaigns
+        var campaigns = await db.Campaigns
             .AsNoTracking()
+            .Include(c => c.CompanyProfile)
             .Where(c => c.IsActive && c.PaymentStatus == PaymentStatus.Paid)
             .OrderByDescending(c => c.Id)
-            .Select(c => new CampaignResponse
-            {
-                Id = c.Id,
-                CompanyId = c.CompanyId,
-                TotalShares = c.TotalShares,
-                AvailableShares = c.AvailableShares,
-                PricePerShare = c.PricePerShare,
-                MinInvestmentThreshold = c.MinInvestmentThreshold,
-                PaymentStatus = c.PaymentStatus.ToString(),
-                BKashTransactionId = c.BKashTransactionId,
-                IsActive = c.IsActive
-            })
             .ToListAsync(cancellationToken);
+
+        return campaigns.Select(c => MapCampaign(c)).ToList();
+    }
+
+    public async Task<IReadOnlyList<CampaignResponse>> GetCompanyCampaignsAsync(
+        Guid companyUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var profile = await db.CompanyProfiles
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.UserId == companyUserId, cancellationToken);
+
+        if (profile is null)
+            return Array.Empty<CampaignResponse>();
+
+        var campaigns = await db.Campaigns
+            .AsNoTracking()
+            .Include(c => c.CompanyProfile)
+            .Where(c => c.CompanyId == profile.Id)
+            .OrderByDescending(c => c.Id)
+            .ToListAsync(cancellationToken);
+
+        return campaigns.Select(c => MapCampaign(c)).ToList();
     }
 
     public async Task<CampaignResponse?> GetCampaignAsync(Guid campaignId, CancellationToken cancellationToken = default)
     {
-        var campaign = await db.Campaigns.AsNoTracking().FirstOrDefaultAsync(c => c.Id == campaignId, cancellationToken);
+        var campaign = await db.Campaigns
+            .AsNoTracking()
+            .Include(c => c.CompanyProfile)
+            .FirstOrDefaultAsync(c => c.Id == campaignId, cancellationToken);
         return campaign is null ? null : MapCampaign(campaign);
+    }
+
+    public async Task DeleteCampaignAsync(
+        Guid companyUserId,
+        Guid campaignId,
+        CancellationToken cancellationToken = default)
+    {
+        var campaign = await db.Campaigns
+            .Include(c => c.CompanyProfile)
+            .Include(c => c.Bookings)
+            .FirstOrDefaultAsync(c => c.Id == campaignId, cancellationToken)
+            ?? throw new KeyNotFoundException("Campaign not found.");
+
+        if (campaign.CompanyProfile.UserId != companyUserId)
+            throw new UnauthorizedAccessException("You do not own this campaign.");
+
+        var hasActiveBookings = campaign.Bookings.Any(b =>
+            b.Status is BookingStatus.PreBooked or BookingStatus.Contacted or BookingStatus.Confirmed);
+
+        if (hasActiveBookings)
+            throw new InvalidOperationException("Cannot delete a campaign with active bookings.");
+
+        if (campaign.Bookings.Count > 0)
+            db.Bookings.RemoveRange(campaign.Bookings);
+
+        db.Campaigns.Remove(campaign);
+        await db.SaveChangesAsync(cancellationToken);
     }
 
     private async Task EnsurePaymentCompletedAsync(
@@ -142,10 +189,12 @@ public class CampaignService(
 
     public static string BuildCampaignReferenceKey(Guid campaignId) => $"campaign:{campaignId}";
 
-    private static CampaignResponse MapCampaign(Campaign c) => new()
+    private static CampaignResponse MapCampaign(Campaign c, string? companyName = null) => new()
     {
         Id = c.Id,
         CompanyId = c.CompanyId,
+        CompanyName = companyName ?? c.CompanyProfile?.CompanyName ?? string.Empty,
+        EquityPercentageOffered = c.EquityPercentageOffered,
         TotalShares = c.TotalShares,
         AvailableShares = c.AvailableShares,
         PricePerShare = c.PricePerShare,

@@ -19,6 +19,14 @@ public class CampaignsController(ICampaignService campaignService) : ControllerB
         return Ok(await campaignService.GetActiveCampaignsAsync(cancellationToken));
     }
 
+    [HttpGet("company")]
+    [Authorize(Policy = "CompanyOnly")]
+    [ProducesResponseType(typeof(IReadOnlyList<CampaignResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<CampaignResponse>>> GetCompany(CancellationToken cancellationToken)
+    {
+        return Ok(await campaignService.GetCompanyCampaignsAsync(GetUserId(), cancellationToken));
+    }
+
     [HttpGet("{id:guid}")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(CampaignResponse), StatusCodes.Status200OK)]
@@ -61,6 +69,32 @@ public class CampaignsController(ICampaignService campaignService) : ControllerB
         try
         {
             return Ok(await campaignService.ConfirmPaymentAsync(GetUserId(), id, request, cancellationToken));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = "CompanyOnly")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await campaignService.DeleteCampaignAsync(GetUserId(), id, cancellationToken);
+            return NoContent();
         }
         catch (KeyNotFoundException ex)
         {

@@ -4,6 +4,13 @@ import { apiBaseUrl } from './config';
 export const TOKEN_STORAGE_KEY = 'ims_access_token';
 export const USER_STORAGE_KEY = 'ims_user';
 
+export type RegisterCompanyResponse = {
+  message: string;
+  email: string;
+  companyName: string;
+  approvalStatus: string;
+};
+
 export type AuthUser = {
   userId: string;
   email: string;

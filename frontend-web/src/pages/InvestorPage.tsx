@@ -5,11 +5,17 @@ import { useNotificationStore } from '../store/notificationStore';
 
 type Campaign = {
   id: string;
+  companyName: string;
   availableShares: number;
   pricePerShare: number;
   minInvestmentThreshold: number;
   totalShares: number;
+  equityPercentageOffered: number;
 };
+
+function equityPerShare(campaign: Pick<Campaign, 'equityPercentageOffered' | 'totalShares'>) {
+  return campaign.totalShares > 0 ? campaign.equityPercentageOffered / campaign.totalShares : 0;
+}
 
 type Booking = {
   id: string;
@@ -81,9 +87,13 @@ export function InvestorPage() {
               className="rounded-lg border bg-white p-4 text-left hover:border-indigo-400"
               onClick={() => setSelected(c)}
             >
-              <p className="font-medium">{c.availableShares} / {c.totalShares} shares available</p>
+              <p className="font-medium">{c.companyName}</p>
               <p className="text-sm text-slate-600">
-                {c.pricePerShare} BDT/share · min {c.minInvestmentThreshold} BDT
+                {c.equityPercentageOffered}% of company · {c.availableShares} / {c.totalShares} share units
+              </p>
+              <p className="text-sm text-slate-600">
+                {c.pricePerShare} BDT/share · min {c.minInvestmentThreshold} BDT ·{' '}
+                {equityPerShare(c).toFixed(4)}% company per share
               </p>
             </button>
           ))}

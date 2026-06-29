@@ -75,12 +75,17 @@ public class PaymentsController(
     [AllowAnonymous]
     public async Task<IActionResult> Callback([FromQuery] string transactionId, CancellationToken cancellationToken)
     {
+        var session = sessionStore.Get(transactionId);
         var settings = paymentOptions.Value;
         var result = await paymentStrategy.VerifyPaymentAsync(transactionId, cancellationToken);
 
         var targetBase = result.Success ? settings.SuccessRedirectUrl : settings.FailureRedirectUrl;
         var separator = targetBase.Contains('?') ? '&' : '?';
-        var redirect = $"{targetBase}{separator}transactionId={Uri.EscapeDataString(transactionId)}&success={result.Success.ToString().ToLowerInvariant()}";
+        var redirect =
+            $"{targetBase}{separator}transactionId={Uri.EscapeDataString(transactionId)}&success={result.Success.ToString().ToLowerInvariant()}";
+
+        if (!string.IsNullOrWhiteSpace(session?.ReferenceKey))
+            redirect += $"&referenceKey={Uri.EscapeDataString(session.ReferenceKey)}";
 
         return Redirect(redirect);
     }

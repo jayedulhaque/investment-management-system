@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
+import { emptyCompanyRegistration } from '../types/company';
 
 export function RegisterPage() {
   const { registerInvestor, registerCompany } = useAuthStore();
@@ -8,23 +9,31 @@ export function RegisterPage() {
   const [role, setRole] = useState<'Investor' | 'Company'>('Investor');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [documentationUrl, setDocumentationUrl] = useState('https://example.com/docs.pdf');
+  const [company, setCompany] = useState(emptyCompanyRegistration);
   const [error, setError] = useState<string | null>(null);
+
+  const updateCompany = (field: keyof ReturnType<typeof emptyCompanyRegistration>, value: string) => {
+    setCompany((prev) => ({ ...prev, [field]: value }));
+  };
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     try {
-      if (role === 'Investor') await registerInvestor(email, password);
-      else await registerCompany(email, password, documentationUrl);
-      navigate(role === 'Investor' ? '/investor' : '/company');
+      if (role === 'Investor') {
+        await registerInvestor(email, password);
+        navigate('/investor');
+        return;
+      }
+      const result = await registerCompany(email, password, company);
+      navigate('/login', { state: { message: result.message } });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
     }
   };
 
   return (
-    <div className="mx-auto max-w-md rounded-lg bg-white p-6 shadow">
+    <div className={`mx-auto rounded-lg bg-white p-6 shadow ${role === 'Company' ? 'max-w-2xl' : 'max-w-md'}`}>
       <h1 className="mb-4 text-xl font-bold">Register</h1>
       <div className="mb-4 flex gap-2">
         {(['Investor', 'Company'] as const).map((r) => (
@@ -38,34 +47,166 @@ export function RegisterPage() {
           </button>
         ))}
       </div>
-      <form onSubmit={onSubmit} className="space-y-3">
-        <input
-          type="email"
-          placeholder="Email"
-          className="w-full rounded border px-3 py-2"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-        <input
-          type="password"
-          placeholder="Password (min 8)"
-          className="w-full rounded border px-3 py-2"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          minLength={8}
-          required
-        />
+      <form onSubmit={onSubmit} className="space-y-4">
+        <fieldset className="space-y-3">
+          <legend className="mb-1 text-sm font-semibold text-slate-700">Account</legend>
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium text-slate-700">Login email</span>
+            <input
+              type="email"
+              className="w-full rounded border px-3 py-2"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium text-slate-700">Password</span>
+            <input
+              type="password"
+              className="w-full rounded border px-3 py-2"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              minLength={8}
+              required
+            />
+            <span className="mt-1 block text-xs text-slate-500">Minimum 8 characters</span>
+          </label>
+        </fieldset>
+
         {role === 'Company' && (
-          <input
-            type="url"
-            placeholder="Documentation URL"
-            className="w-full rounded border px-3 py-2"
-            value={documentationUrl}
-            onChange={(e) => setDocumentationUrl(e.target.value)}
-            required
-          />
+          <>
+            <fieldset className="space-y-3">
+              <legend className="mb-1 text-sm font-semibold text-slate-700">Company identity</legend>
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium text-slate-700">Company name</span>
+                <input
+                  className="w-full rounded border px-3 py-2"
+                  value={company.companyName}
+                  onChange={(e) => updateCompany('companyName', e.target.value)}
+                  required
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium text-slate-700">Legal name (optional)</span>
+                <input
+                  className="w-full rounded border px-3 py-2"
+                  value={company.legalName}
+                  onChange={(e) => updateCompany('legalName', e.target.value)}
+                />
+                <span className="mt-1 block text-xs text-slate-500">Registered entity name if different from trade name</span>
+              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="mb-1 block font-medium text-slate-700">Registration number (optional)</span>
+                  <input
+                    className="w-full rounded border px-3 py-2"
+                    value={company.registrationNumber}
+                    onChange={(e) => updateCompany('registrationNumber', e.target.value)}
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block font-medium text-slate-700">Industry (optional)</span>
+                  <input
+                    className="w-full rounded border px-3 py-2"
+                    value={company.industry}
+                    onChange={(e) => updateCompany('industry', e.target.value)}
+                    placeholder="e.g. FinTech, Manufacturing"
+                  />
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset className="space-y-3">
+              <legend className="mb-1 text-sm font-semibold text-slate-700">Contact & location</legend>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="mb-1 block font-medium text-slate-700">Phone (optional)</span>
+                  <input
+                    type="tel"
+                    className="w-full rounded border px-3 py-2"
+                    value={company.phone}
+                    onChange={(e) => updateCompany('phone', e.target.value)}
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block font-medium text-slate-700">Contact email (optional)</span>
+                  <input
+                    type="email"
+                    className="w-full rounded border px-3 py-2"
+                    value={company.contactEmail}
+                    onChange={(e) => updateCompany('contactEmail', e.target.value)}
+                  />
+                  <span className="mt-1 block text-xs text-slate-500">Public contact if different from login email</span>
+                </label>
+              </div>
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium text-slate-700">Website (optional)</span>
+                <input
+                  type="url"
+                  className="w-full rounded border px-3 py-2"
+                  value={company.website}
+                  onChange={(e) => updateCompany('website', e.target.value)}
+                  placeholder="https://example.com"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium text-slate-700">Address (optional)</span>
+                <input
+                  className="w-full rounded border px-3 py-2"
+                  value={company.address}
+                  onChange={(e) => updateCompany('address', e.target.value)}
+                />
+              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="mb-1 block font-medium text-slate-700">City (optional)</span>
+                  <input
+                    className="w-full rounded border px-3 py-2"
+                    value={company.city}
+                    onChange={(e) => updateCompany('city', e.target.value)}
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block font-medium text-slate-700">Country (optional)</span>
+                  <input
+                    className="w-full rounded border px-3 py-2"
+                    value={company.country}
+                    onChange={(e) => updateCompany('country', e.target.value)}
+                  />
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset className="space-y-3">
+              <legend className="mb-1 text-sm font-semibold text-slate-700">About & documents</legend>
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium text-slate-700">Company description</span>
+                <textarea
+                  className="w-full rounded border px-3 py-2"
+                  rows={4}
+                  value={company.description}
+                  onChange={(e) => updateCompany('description', e.target.value)}
+                  required
+                />
+                <span className="mt-1 block text-xs text-slate-500">What the company does and why investors should care</span>
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium text-slate-700">Documentation URL</span>
+                <input
+                  type="url"
+                  className="w-full rounded border px-3 py-2"
+                  value={company.documentationUrl}
+                  onChange={(e) => updateCompany('documentationUrl', e.target.value)}
+                  placeholder="https://example.com/company-docs.pdf"
+                  required
+                />
+                <span className="mt-1 block text-xs text-slate-500">Link to incorporation papers, financials, or pitch deck for admin review</span>
+              </label>
+            </fieldset>
+          </>
         )}
+
         {error && <p className="text-sm text-red-600">{error}</p>}
         <button type="submit" className="w-full rounded bg-indigo-600 py-2 text-white">
           Register

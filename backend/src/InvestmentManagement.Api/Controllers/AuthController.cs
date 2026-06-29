@@ -40,14 +40,14 @@ public class AuthController(IAuthService authService) : ControllerBase
     }
 
     [HttpPost("register/company")]
-    [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(RegisterCompanyResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<AuthResponse>> RegisterCompany([FromBody] RegisterCompanyRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<RegisterCompanyResponse>> RegisterCompany([FromBody] RegisterCompanyRequest request, CancellationToken cancellationToken)
     {
         try
         {
             var response = await authService.RegisterCompanyAsync(request, cancellationToken);
-            return CreatedAtAction(nameof(Login), response);
+            return Created(string.Empty, response);
         }
         catch (InvalidOperationException ex)
         {

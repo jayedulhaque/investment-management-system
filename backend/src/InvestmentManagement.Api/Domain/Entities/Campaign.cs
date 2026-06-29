@@ -6,6 +6,7 @@ public class Campaign
 {
     public Guid Id { get; set; }
     public Guid CompanyId { get; set; }
+    public decimal EquityPercentageOffered { get; set; }
     public int TotalShares { get; set; }
     public int AvailableShares { get; set; }
     public decimal PricePerShare { get; set; }

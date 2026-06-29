@@ -1,9 +1,11 @@
 using System.Text;
+using InvestmentManagement.Api.Authorization;
 using InvestmentManagement.Api.HostedServices;
 using InvestmentManagement.Api.Options;
 using InvestmentManagement.Api.Payments;
 using InvestmentManagement.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
 
 namespace InvestmentManagement.Api.Extensions;
@@ -27,6 +29,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICampaignService, CampaignService>();
         services.AddScoped<IBookingService, BookingService>();
         services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IAuthorizationHandler, ApprovedCompanyAuthorizationHandler>();
 
         services.AddHostedService<BookingExpirationHostedService>();
 
@@ -90,7 +93,9 @@ public static class ServiceCollectionExtensions
         services.AddAuthorization(options =>
         {
             options.AddPolicy("AdminOnly", policy => policy.RequireRole(nameof(Domain.Enums.UserRole.Admin)));
-            options.AddPolicy("CompanyOnly", policy => policy.RequireRole(nameof(Domain.Enums.UserRole.Company)));
+            options.AddPolicy("CompanyOnly", policy =>
+                policy.RequireRole(nameof(Domain.Enums.UserRole.Company))
+                    .AddRequirements(new ApprovedCompanyRequirement()));
             options.AddPolicy("InvestorOnly", policy => policy.RequireRole(nameof(Domain.Enums.UserRole.Investor)));
         });
 

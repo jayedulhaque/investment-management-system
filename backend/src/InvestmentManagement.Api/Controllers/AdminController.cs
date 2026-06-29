@@ -12,6 +12,13 @@ namespace InvestmentManagement.Api.Controllers;
 [Authorize(Policy = "AdminOnly")]
 public class AdminController(IAdminService adminService) : ControllerBase
 {
+    [HttpGet("profile")]
+    [ProducesResponseType(typeof(AdminProfileResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<AdminProfileResponse>> GetProfile(CancellationToken cancellationToken)
+    {
+        return Ok(await adminService.GetProfileAsync(GetUserId(), cancellationToken));
+    }
+
     [HttpPut("profile")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -36,6 +43,38 @@ public class AdminController(IAdminService adminService) : ControllerBase
         return Ok(companies);
     }
 
+    [HttpGet("companies/approved")]
+    [ProducesResponseType(typeof(IReadOnlyList<ApprovedCompanyResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<ApprovedCompanyResponse>>> GetApprovedCompanies(
+        CancellationToken cancellationToken)
+    {
+        return Ok(await adminService.GetApprovedCompaniesAsync(cancellationToken));
+    }
+
+    [HttpGet("companies/rejected")]
+    [ProducesResponseType(typeof(IReadOnlyList<RejectedCompanyResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<RejectedCompanyResponse>>> GetRejectedCompanies(
+        CancellationToken cancellationToken)
+    {
+        return Ok(await adminService.GetRejectedCompaniesAsync(cancellationToken));
+    }
+
+    [HttpGet("companies/{id:guid}")]
+    [ProducesResponseType(typeof(CompanyDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<CompanyDetailResponse>> GetCompany(Guid id, CancellationToken cancellationToken)
+    {
+        var company = await adminService.GetCompanyByIdAsync(id, cancellationToken);
+        return company is null ? NotFound() : Ok(company);
+    }
+
+    [HttpGet("investors")]
+    [ProducesResponseType(typeof(IReadOnlyList<InvestorSummaryResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<InvestorSummaryResponse>>> GetInvestors(CancellationToken cancellationToken)
+    {
+        return Ok(await adminService.GetInvestorsAsync(cancellationToken));
+    }
+
     [HttpPost("companies/{id:guid}/approve")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -45,6 +84,48 @@ public class AdminController(IAdminService adminService) : ControllerBase
         try
         {
             await adminService.ApproveCompanyAsync(id, request, cancellationToken);
+            return NoContent();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("companies/{id:guid}/reject")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RejectApprovedCompany(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await adminService.RejectApprovedCompanyAsync(id, cancellationToken);
+            return NoContent();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpDelete("companies/{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteRejectedCompany(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await adminService.DeleteRejectedCompanyAsync(id, cancellationToken);
             return NoContent();
         }
         catch (KeyNotFoundException ex)

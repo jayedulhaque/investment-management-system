@@ -13,6 +13,9 @@ public class CampaignConfiguration : IEntityTypeConfiguration<Campaign>
 
         builder.HasKey(c => c.Id);
 
+        builder.Property(c => c.EquityPercentageOffered)
+            .HasPrecision(5, 2);
+
         builder.Property(c => c.PricePerShare)
             .HasPrecision(18, 2);
 

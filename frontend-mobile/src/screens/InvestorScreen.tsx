@@ -7,11 +7,17 @@ import { useNotificationStore } from '../store/notificationStore';
 
 type Campaign = {
   id: string;
+  companyName: string;
   availableShares: number;
   pricePerShare: number;
   minInvestmentThreshold: number;
   totalShares: number;
+  equityPercentageOffered: number;
 };
+
+function equityPerShare(campaign: Pick<Campaign, 'equityPercentageOffered' | 'totalShares'>) {
+  return campaign.totalShares > 0 ? campaign.equityPercentageOffered / campaign.totalShares : 0;
+}
 
 type Booking = { id: string; reservedShares: number; totalPrice: number; status: string };
 
@@ -71,8 +77,11 @@ export function InvestorScreen() {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <Pressable className="bg-white p-3 rounded mb-2 border" onPress={() => setSelected(item)}>
-            <Text>{item.availableShares}/{item.totalShares} shares</Text>
-            <Text className="text-slate-600 text-sm">{item.pricePerShare} BDT/share</Text>
+            <Text className="font-medium">{item.companyName}</Text>
+            <Text>{item.equityPercentageOffered}% of company · {item.availableShares}/{item.totalShares} units</Text>
+            <Text className="text-slate-600 text-sm">
+              {item.pricePerShare} BDT/share · {equityPerShare(item).toFixed(4)}% company/share
+            </Text>
           </Pressable>
         )}
       />

@@ -1,10 +1,12 @@
 import { FormEvent, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 
 export function LoginPage() {
   const login = useAuthStore((s) => s.login);
   const navigate = useNavigate();
+  const location = useLocation();
+  const successMessage = (location.state as { message?: string } | null)?.message;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +28,9 @@ export function LoginPage() {
   return (
     <div className="mx-auto max-w-md rounded-lg bg-white p-6 shadow">
       <h1 className="mb-4 text-xl font-bold">Login</h1>
+      {successMessage && (
+        <p className="mb-3 rounded bg-green-50 p-2 text-sm text-green-800">{successMessage}</p>
+      )}
       <form onSubmit={onSubmit} className="space-y-3">
         <input
           type="email"
