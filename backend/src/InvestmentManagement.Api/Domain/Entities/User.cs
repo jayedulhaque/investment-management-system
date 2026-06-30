@@ -11,5 +11,6 @@ public class User
     public string? BKashNumber { get; set; }
 
     public CompanyProfile? CompanyProfile { get; set; }
+    public InvestorProfile? InvestorProfile { get; set; }
     public ICollection<Booking> Bookings { get; set; } = new List<Booking>();
 }

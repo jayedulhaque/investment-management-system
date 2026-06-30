@@ -1,5 +1,22 @@
 import { apiBaseUrl } from './config';
 
+function readApiErrorMessage(body: unknown, fallback: string): string {
+  if (!body || typeof body !== 'object') return fallback;
+
+  const record = body as Record<string, unknown>;
+  if (typeof record.message === 'string' && record.message.trim()) return record.message;
+
+  const errors = record.errors;
+  if (errors && typeof errors === 'object') {
+    const messages = Object.values(errors as Record<string, unknown>)
+      .flatMap((value) => (Array.isArray(value) ? value : []))
+      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+    if (messages.length > 0) return messages.join(' ');
+  }
+
+  return fallback;
+}
+
 export const TOKEN_STORAGE_KEY = 'ims_access_token';
 export const USER_STORAGE_KEY = 'ims_user';
 
@@ -67,8 +84,8 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   if (!response.ok) {
     let message = response.statusText;
     try {
-      const err = (await response.json()) as { message?: string };
-      message = err.message ?? message;
+      const err = await response.json();
+      message = readApiErrorMessage(err, message);
     } catch {
       /* ignore */
     }

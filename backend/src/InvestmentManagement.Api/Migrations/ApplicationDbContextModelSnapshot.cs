@@ -182,6 +182,64 @@ namespace InvestmentManagement.Api.Migrations
                     b.ToTable("CompanyProfiles", (string)null);
                 });
 
+            modelBuilder.Entity("InvestmentManagement.Api.Domain.Entities.InvestorProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("City")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ContactEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Country")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateOnly?>("DateOfBirth")
+                        .HasColumnType("date");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("NationalId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Occupation")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("InvestorProfiles", (string)null);
+                });
+
             modelBuilder.Entity("InvestmentManagement.Api.Domain.Entities.Notification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -302,6 +360,17 @@ namespace InvestmentManagement.Api.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("InvestmentManagement.Api.Domain.Entities.InvestorProfile", b =>
+                {
+                    b.HasOne("InvestmentManagement.Api.Domain.Entities.User", "User")
+                        .WithOne("InvestorProfile")
+                        .HasForeignKey("InvestmentManagement.Api.Domain.Entities.InvestorProfile", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("InvestmentManagement.Api.Domain.Entities.Notification", b =>
                 {
                     b.HasOne("InvestmentManagement.Api.Domain.Entities.Campaign", "Campaign")
@@ -335,6 +404,8 @@ namespace InvestmentManagement.Api.Migrations
                     b.Navigation("Bookings");
 
                     b.Navigation("CompanyProfile");
+
+                    b.Navigation("InvestorProfile");
                 });
 #pragma warning restore 612, 618
         }

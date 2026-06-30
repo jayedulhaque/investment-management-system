@@ -1,6 +1,20 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { apiFetch } from '../lib/api';
 import { PaymentPanel } from '../components/PaymentPanel';
+import { CompanyProfileForm } from '../components/CompanyProfileForm';
+import { CompanyBookingsSection } from '../components/CompanyBookingsSection';
+import { CompanyBookingDetailsModal } from '../components/CompanyBookingDetailsModal';
+import {
+  companyProfileFromRegistration,
+  emptyCompanyRegistration,
+  toCompanyProfileUpdatePayload,
+  type CompanyProfile,
+  type CompanyRegistrationInfo,
+} from '../types/company';
+import {
+  type CompanyBookingDetail,
+  type CompanyBookingSummary,
+} from '../lib/companyBookings';
 
 type Campaign = {
   id: string;
@@ -22,21 +36,22 @@ function campaignStakeSummary(campaign: Pick<Campaign, 'equityPercentageOffered'
   return `Offering ${campaign.totalShares} shares = ${campaign.equityPercentageOffered}% of the company (${perShare.toFixed(4)}% company ownership per share)`;
 }
 
-type Booking = {
-  id: string;
-  reservedShares: number;
-  totalPrice: number;
-  status: string;
-};
 
 export function CompanyPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookingsRefreshKey, setBookingsRefreshKey] = useState(0);
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [bookingDetail, setBookingDetail] = useState<CompanyBookingDetail | null>(null);
+  const [loadingBookingDetail, setLoadingBookingDetail] = useState(false);
   const [pendingCampaign, setPendingCampaign] = useState<{
     id: string;
     payment: { transactionId: string; redirectUrl: string };
   } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [profile, setProfile] = useState<CompanyRegistrationInfo>(emptyCompanyRegistration());
+  const [loginEmail, setLoginEmail] = useState('');
   const [form, setForm] = useState({
     equityPercentageOffered: 50,
     totalShares: 500,
@@ -50,10 +65,9 @@ export function CompanyPage() {
   const loadCampaigns = () =>
     apiFetch<Campaign[]>('/api/campaigns/company').then(setCampaigns);
 
-  const loadBookings = () =>
-    apiFetch<Booking[]>('/api/bookings/company').then(setBookings);
+  const refreshBookings = () => setBookingsRefreshKey((key) => key + 1);
 
-  const load = () => Promise.all([loadCampaigns(), loadBookings()]);
+  const load = () => loadCampaigns();
 
   useEffect(() => {
     load().catch(() => undefined);
@@ -90,7 +104,50 @@ export function CompanyPage() {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     });
-    await loadBookings();
+    if (selectedBookingId === bookingId) {
+      reloadBookingDetails(bookingId);
+    }
+    refreshBookings();
+  };
+
+  const approveResell = async (bookingId: string) => {
+    await apiFetch(`/api/bookings/${bookingId}/approve-resell`, { method: 'POST' });
+    setMessage('Resell approved. Shares returned to campaign pool.');
+    closeBookingDetails();
+    refreshBookings();
+    await load();
+  };
+
+  const rejectResell = async (bookingId: string) => {
+    await apiFetch(`/api/bookings/${bookingId}/reject-resell`, { method: 'POST' });
+    setMessage('Resell request rejected.');
+    if (selectedBookingId === bookingId) {
+      reloadBookingDetails(bookingId);
+    }
+    refreshBookings();
+  };
+
+  const openBookingDetails = (booking: CompanyBookingSummary) => {
+    reloadBookingDetails(booking.id);
+  };
+
+  const reloadBookingDetails = (bookingId: string) => {
+    setSelectedBookingId(bookingId);
+    setBookingDetail(null);
+    setLoadingBookingDetail(true);
+    apiFetch<CompanyBookingDetail>(`/api/bookings/company/${bookingId}`)
+      .then(setBookingDetail)
+      .catch(() => {
+        setMessage('Could not load booking details.');
+        setSelectedBookingId(null);
+      })
+      .finally(() => setLoadingBookingDetail(false));
+  };
+
+  const closeBookingDetails = () => {
+    setSelectedBookingId(null);
+    setBookingDetail(null);
+    setLoadingBookingDetail(false);
   };
 
   const deleteCampaign = async (campaignId: string) => {
@@ -106,10 +163,84 @@ export function CompanyPage() {
     }
   };
 
+  const openProfileEditor = async () => {
+    setEditingProfile(true);
+    setLoadingProfile(true);
+    setMessage(null);
+    try {
+      const data = await apiFetch<CompanyProfile>('/api/companies/profile');
+      setLoginEmail(data.email);
+      setProfile(companyProfileFromRegistration(data));
+    } catch {
+      setMessage('Could not load company profile.');
+      setEditingProfile(false);
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
+
+  const updateProfileField = (field: keyof CompanyRegistrationInfo, value: string) => {
+    setProfile((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const saveProfile = async (e: FormEvent) => {
+    e.preventDefault();
+    setMessage(null);
+    try {
+      await apiFetch('/api/companies/profile', {
+        method: 'PUT',
+        body: JSON.stringify(toCompanyProfileUpdatePayload(profile)),
+      });
+      setMessage('Company profile updated.');
+      setEditingProfile(false);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Failed to update profile');
+    }
+  };
+
   return (
     <div className="space-y-8">
       <h1 className="text-2xl font-bold">Company dashboard</h1>
       {message && <p className="rounded bg-blue-50 p-2 text-sm">{message}</p>}
+
+      <section className="rounded-lg bg-white p-4 shadow">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-semibold">Company profile</h2>
+          {!editingProfile && (
+            <button
+              type="button"
+              onClick={() => openProfileEditor().catch(() => undefined)}
+              className="rounded bg-indigo-600 px-4 py-2 text-sm text-white"
+            >
+              Edit profile
+            </button>
+          )}
+        </div>
+        {editingProfile && loadingProfile && (
+          <p className="text-sm text-slate-600">Loading profile…</p>
+        )}
+        {editingProfile && !loadingProfile && (
+          <form onSubmit={saveProfile} className="space-y-4">
+            <CompanyProfileForm
+              value={profile}
+              onChange={updateProfileField}
+              loginEmail={loginEmail}
+            />
+            <div className="flex gap-2">
+              <button type="submit" className="rounded bg-indigo-600 px-4 py-2 text-white">
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingProfile(false)}
+                className="rounded border px-4 py-2 text-slate-700"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+      </section>
 
       <section className="rounded-lg bg-white p-4 shadow">
         {campaigns.length === 0 ? (
@@ -257,30 +388,22 @@ export function CompanyPage() {
         )}
       </section>
 
-      <section>
-        <h2 className="mb-3 font-semibold">Bookings on your campaign</h2>
-        <ul className="space-y-2">
-          {bookings.map((b) => (
-            <li key={b.id} className="rounded border bg-white p-3 text-sm">
-              <p>
-                {b.reservedShares} shares · {b.totalPrice.toFixed(2)} BDT · <strong>{b.status}</strong>
-              </p>
-              <div className="mt-2 flex gap-2">
-                {b.status === 'PreBooked' && (
-                  <button type="button" onClick={() => updateStatus(b.id, 'Contacted')}>
-                    Mark contacted
-                  </button>
-                )}
-                {b.status === 'Contacted' && (
-                  <button type="button" onClick={() => updateStatus(b.id, 'Confirmed')}>
-                    Confirm
-                  </button>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <CompanyBookingsSection
+        refreshKey={bookingsRefreshKey}
+        onSelectBooking={openBookingDetails}
+        onUpdateStatus={(id, status) => updateStatus(id, status).catch(() => undefined)}
+        onApproveResell={(id) => approveResell(id).catch(() => undefined)}
+        onRejectResell={(id) => rejectResell(id).catch(() => undefined)}
+      />
+
+      <CompanyBookingDetailsModal
+        booking={bookingDetail}
+        loading={loadingBookingDetail && selectedBookingId !== null}
+        onClose={closeBookingDetails}
+        onUpdateStatus={(id, status) => updateStatus(id, status).catch(() => undefined)}
+        onApproveResell={(id) => approveResell(id).catch(() => undefined)}
+        onRejectResell={(id) => rejectResell(id).catch(() => undefined)}
+      />
     </div>
   );
 }

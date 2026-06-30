@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using InvestmentManagement.Api.Contracts.Campaigns;
+using InvestmentManagement.Api.Contracts.Common;
 using InvestmentManagement.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,10 +14,12 @@ public class CampaignsController(ICampaignService campaignService) : ControllerB
 {
     [HttpGet]
     [AllowAnonymous]
-    [ProducesResponseType(typeof(IReadOnlyList<CampaignResponse>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<CampaignResponse>>> GetActive(CancellationToken cancellationToken)
+    [ProducesResponseType(typeof(PagedResponse<CampaignResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PagedResponse<CampaignResponse>>> GetActive(
+        [FromQuery] ActiveCampaignListQuery query,
+        CancellationToken cancellationToken)
     {
-        return Ok(await campaignService.GetActiveCampaignsAsync(cancellationToken));
+        return Ok(await campaignService.GetActiveCampaignsAsync(query, cancellationToken));
     }
 
     [HttpGet("company")]

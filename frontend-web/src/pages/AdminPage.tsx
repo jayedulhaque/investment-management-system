@@ -1,38 +1,21 @@
 import { FormEvent, useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { CompanyListSection } from '../components/CompanyListSection';
 import { apiFetch } from '../lib/api';
-
-type CompanyReview = {
-  companyProfileId: string;
-  email: string;
-  companyName: string;
-  legalName?: string | null;
-  registrationNumber?: string | null;
-  description: string;
-  website?: string | null;
-  phone?: string | null;
-  contactEmail?: string | null;
-  address?: string | null;
-  city?: string | null;
-  country?: string | null;
-  industry?: string | null;
-  documentationUrl: string;
-  approvalStatus?: string;
-};
-
-type PendingCompany = CompanyReview;
-
-type ApprovedCompany = CompanyReview & {
-  approvalStatus: string;
-};
-
-type RejectedCompany = CompanyReview & {
-  approvalStatus: string;
-};
+import type { CompanyReview } from '../lib/adminCompanyList';
 
 type Investor = {
   userId: string;
   email: string;
+  fullName: string;
+  phone: string;
+  nationalId: string;
+  dateOfBirth?: string | null;
+  occupation?: string | null;
+  address: string;
+  city: string;
+  country: string;
+  contactEmail?: string | null;
 };
 
 function displayValue(value?: string | null) {
@@ -212,10 +195,8 @@ function CompanyModal({
 }
 
 export function AdminPage() {
-  const [pending, setPending] = useState<PendingCompany[]>([]);
-  const [approved, setApproved] = useState<ApprovedCompany[]>([]);
-  const [rejected, setRejected] = useState<RejectedCompany[]>([]);
   const [investors, setInvestors] = useState<Investor[]>([]);
+  const [listRefreshKey, setListRefreshKey] = useState(0);
   const [profile, setProfile] = useState({ email: '', password: '', bKashNumber: '' });
   const [editingProfile, setEditingProfile] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(false);
@@ -225,21 +206,15 @@ export function AdminPage() {
   const [detailLoadError, setDetailLoadError] = useState<string | null>(null);
   const [loadingCompanyDetail, setLoadingCompanyDetail] = useState(false);
 
-  const load = () =>
-    Promise.all([
-      apiFetch<PendingCompany[]>('/api/admin/companies/pending'),
-      apiFetch<ApprovedCompany[]>('/api/admin/companies/approved'),
-      apiFetch<RejectedCompany[]>('/api/admin/companies/rejected'),
-      apiFetch<Investor[]>('/api/admin/investors'),
-    ]).then(([pendingCompanies, approvedCompanies, rejectedCompanies, investorList]) => {
-      setPending(pendingCompanies);
-      setApproved(approvedCompanies);
-      setRejected(rejectedCompanies);
+  const refreshCompanyLists = () => setListRefreshKey((key) => key + 1);
+
+  const loadInvestors = () =>
+    apiFetch<Investor[]>('/api/admin/investors').then((investorList) => {
       setInvestors(investorList);
     });
 
   useEffect(() => {
-    load().catch(() => undefined);
+    loadInvestors().catch(() => undefined);
   }, []);
 
   const openCompanyModal = (company: CompanyReview, mode: 'pending' | 'approved' | 'rejected') => {
@@ -261,7 +236,7 @@ export function AdminPage() {
       body: JSON.stringify({ approve: approveCompany }),
     });
     setModalCompany(null);
-    await load();
+    refreshCompanyLists();
     setMessage(approveCompany ? 'Company approved.' : 'Company rejected.');
   };
 
@@ -276,7 +251,7 @@ export function AdminPage() {
     }
     await apiFetch(`/api/admin/companies/${id}`, { method: 'DELETE' });
     setModalCompany(null);
-    await load();
+    refreshCompanyLists();
     setMessage('Rejected company deleted.');
   };
 
@@ -291,7 +266,7 @@ export function AdminPage() {
     }
     await apiFetch(`/api/admin/companies/${id}/reject`, { method: 'POST' });
     setModalCompany(null);
-    await load();
+    refreshCompanyLists();
     setMessage('Company rejected.');
   };
 
@@ -403,91 +378,50 @@ export function AdminPage() {
         )}
       </section>
 
-      <section>
-        <h2 className="mb-3 font-semibold">Pending companies ({pending.length})</h2>
-        {pending.length === 0 ? (
-          <p className="text-sm text-slate-600">No companies awaiting approval.</p>
-        ) : (
-          <ul className="space-y-2">
-            {pending.map((c) => (
-              <li key={c.companyProfileId}>
-                <button
-                  type="button"
-                  onClick={() => openCompanyModal(c, 'pending')}
-                  className="w-full rounded border bg-white p-3 text-left text-sm transition hover:border-indigo-400 hover:shadow-sm"
-                >
-                  <p className="font-medium">{c.companyName}</p>
-                  <p className="text-xs text-slate-600">{c.email}</p>
-                  {c.industry && <p className="text-xs text-slate-500">{c.industry}</p>}
-                  <p className="mt-1 text-xs text-indigo-600">Click to view full details</p>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <CompanyListSection
+        title="Pending companies"
+        apiPath="/api/admin/companies/pending"
+        mode="pending"
+        emptyMessage="No companies awaiting approval."
+        refreshKey={listRefreshKey}
+        onOpenCompany={(c) => openCompanyModal(c, 'pending')}
+      />
 
-      <section>
-        <h2 className="mb-3 font-semibold">Approved companies ({approved.length})</h2>
-        {approved.length === 0 ? (
-          <p className="text-sm text-slate-600">No approved companies yet.</p>
-        ) : (
-          <ul className="space-y-2">
-            {approved.map((c) => (
-              <li key={c.companyProfileId} className="flex items-stretch gap-2">
-                <button
-                  type="button"
-                  onClick={() => openCompanyModal(c, 'approved')}
-                  className="flex-1 rounded border bg-white p-3 text-left text-sm transition hover:border-indigo-400 hover:shadow-sm"
-                >
-                  <p className="font-medium">{c.companyName}</p>
-                  <p className="text-xs text-green-700">{c.approvalStatus}</p>
-                  <p className="mt-1 text-xs text-slate-600">{c.email}</p>
-                  <p className="mt-1 text-xs text-indigo-600">Click to view full details</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => rejectApproved(c.companyProfileId, c.companyName).catch(() => undefined)}
-                  className="shrink-0 rounded border border-red-200 bg-white px-4 text-sm text-red-700 transition hover:bg-red-50"
-                >
-                  Reject
-                </button>
-              </li>
-            ))}
-          </ul>
+      <CompanyListSection
+        title="Approved companies"
+        apiPath="/api/admin/companies/approved"
+        mode="approved"
+        emptyMessage="No approved companies yet."
+        refreshKey={listRefreshKey}
+        onOpenCompany={(c) => openCompanyModal(c, 'approved')}
+        renderActions={(c) => (
+          <button
+            type="button"
+            onClick={() => rejectApproved(c.companyProfileId, c.companyName).catch(() => undefined)}
+            className="shrink-0 rounded border border-red-200 bg-white px-4 text-sm text-red-700 transition hover:bg-red-50"
+          >
+            Reject
+          </button>
         )}
-      </section>
+      />
 
-      <section>
-        <h2 className="mb-3 font-semibold">Rejected companies ({rejected.length})</h2>
-        {rejected.length === 0 ? (
-          <p className="text-sm text-slate-600">No rejected companies.</p>
-        ) : (
-          <ul className="space-y-2">
-            {rejected.map((c) => (
-              <li key={c.companyProfileId} className="flex items-stretch gap-2">
-                <button
-                  type="button"
-                  onClick={() => openCompanyModal(c, 'rejected')}
-                  className="flex-1 rounded border bg-white p-3 text-left text-sm transition hover:border-indigo-400 hover:shadow-sm"
-                >
-                  <p className="font-medium">{c.companyName}</p>
-                  <p className="text-xs text-red-700">{c.approvalStatus}</p>
-                  <p className="mt-1 text-xs text-slate-600">{c.email}</p>
-                  <p className="mt-1 text-xs text-indigo-600">Click to view full details</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => deleteRejected(c.companyProfileId, c.companyName).catch(() => undefined)}
-                  className="shrink-0 rounded border border-red-200 bg-white px-4 text-sm text-red-700 transition hover:bg-red-50"
-                >
-                  Delete
-                </button>
-              </li>
-            ))}
-          </ul>
+      <CompanyListSection
+        title="Rejected companies"
+        apiPath="/api/admin/companies/rejected"
+        mode="rejected"
+        emptyMessage="No rejected companies."
+        refreshKey={listRefreshKey}
+        onOpenCompany={(c) => openCompanyModal(c, 'rejected')}
+        renderActions={(c) => (
+          <button
+            type="button"
+            onClick={() => deleteRejected(c.companyProfileId, c.companyName).catch(() => undefined)}
+            className="shrink-0 rounded border border-red-200 bg-white px-4 text-sm text-red-700 transition hover:bg-red-50"
+          >
+            Delete
+          </button>
         )}
-      </section>
+      />
 
       <CompanyModal
         company={modalCompany}
@@ -522,7 +456,14 @@ export function AdminPage() {
           <ul className="space-y-2">
             {investors.map((i) => (
               <li key={i.userId} className="rounded border bg-white p-3 text-sm">
-                <p className="font-medium">{i.email}</p>
+                <p className="font-medium">{i.fullName || i.email}</p>
+                <p className="text-xs text-slate-600">{i.email}</p>
+                {i.phone && <p className="text-xs text-slate-500">Phone: {i.phone}</p>}
+                {i.city && i.country && (
+                  <p className="text-xs text-slate-500">
+                    {i.city}, {i.country}
+                  </p>
+                )}
               </li>
             ))}
           </ul>

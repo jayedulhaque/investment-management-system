@@ -1,39 +1,22 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Linking, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { CompanyListSection } from '../components/CompanyListSection';
 import { apiFetch } from '../lib/api';
+import type { CompanyReview } from '../lib/adminCompanyList';
 import { useAuthStore } from '../store/authStore';
-
-type CompanyReview = {
-  companyProfileId: string;
-  email: string;
-  companyName: string;
-  legalName?: string | null;
-  registrationNumber?: string | null;
-  description: string;
-  website?: string | null;
-  phone?: string | null;
-  contactEmail?: string | null;
-  address?: string | null;
-  city?: string | null;
-  country?: string | null;
-  industry?: string | null;
-  documentationUrl: string;
-  approvalStatus?: string;
-};
-
-type PendingCompany = CompanyReview;
-
-type ApprovedCompany = CompanyReview & {
-  approvalStatus: string;
-};
-
-type RejectedCompany = CompanyReview & {
-  approvalStatus: string;
-};
 
 type Investor = {
   userId: string;
   email: string;
+  fullName: string;
+  phone: string;
+  nationalId: string;
+  dateOfBirth?: string | null;
+  occupation?: string | null;
+  address: string;
+  city: string;
+  country: string;
+  contactEmail?: string | null;
 };
 
 function displayValue(value?: string | null) {
@@ -158,30 +141,22 @@ function CompanyModal({
 
 export function AdminScreen() {
   const logout = useAuthStore((s) => s.logout);
-  const [pending, setPending] = useState<PendingCompany[]>([]);
-  const [approved, setApproved] = useState<ApprovedCompany[]>([]);
-  const [rejected, setRejected] = useState<RejectedCompany[]>([]);
   const [investors, setInvestors] = useState<Investor[]>([]);
+  const [listRefreshKey, setListRefreshKey] = useState(0);
   const [modalCompany, setModalCompany] = useState<CompanyReview | null>(null);
   const [modalMode, setModalMode] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [loadingCompanyDetail, setLoadingCompanyDetail] = useState(false);
 
-  const load = useCallback(async () => {
-    const [pendingCompanies, approvedCompanies, rejectedCompanies, investorList] = await Promise.all([
-      apiFetch<PendingCompany[]>('/api/admin/companies/pending'),
-      apiFetch<ApprovedCompany[]>('/api/admin/companies/approved'),
-      apiFetch<RejectedCompany[]>('/api/admin/companies/rejected'),
-      apiFetch<Investor[]>('/api/admin/investors'),
-    ]);
-    setPending(pendingCompanies);
-    setApproved(approvedCompanies);
-    setRejected(rejectedCompanies);
+  const refreshCompanyLists = () => setListRefreshKey((key) => key + 1);
+
+  const loadInvestors = useCallback(async () => {
+    const investorList = await apiFetch<Investor[]>('/api/admin/investors');
     setInvestors(investorList);
   }, []);
 
   useEffect(() => {
-    load().catch(() => undefined);
-  }, [load]);
+    loadInvestors().catch(() => undefined);
+  }, [loadInvestors]);
 
   const openCompanyModal = (company: CompanyReview, mode: 'pending' | 'approved' | 'rejected') => {
     setModalMode(mode);
@@ -199,7 +174,7 @@ export function AdminScreen() {
       body: JSON.stringify({ approve: ok }),
     });
     setModalCompany(null);
-    await load();
+    refreshCompanyLists();
   };
 
   const confirmRejectApproved = (id: string, companyName: string) => {
@@ -216,7 +191,7 @@ export function AdminScreen() {
             apiFetch(`/api/admin/companies/${id}/reject`, { method: 'POST' })
               .then(() => {
                 setModalCompany(null);
-                return load();
+                refreshCompanyLists();
               })
               .catch(() => undefined);
           },
@@ -239,7 +214,7 @@ export function AdminScreen() {
             apiFetch(`/api/admin/companies/${id}`, { method: 'DELETE' })
               .then(() => {
                 setModalCompany(null);
-                return load();
+                refreshCompanyLists();
               })
               .catch(() => undefined);
           },
@@ -257,72 +232,48 @@ export function AdminScreen() {
         </Pressable>
       </View>
 
-      <Text className="mb-2 text-lg font-semibold">Pending companies ({pending.length})</Text>
-      {pending.length === 0 ? (
-        <Text className="mb-4 text-sm text-slate-600">No companies awaiting approval.</Text>
-      ) : (
-        pending.map((c) => (
+      <CompanyListSection
+        title="Pending companies"
+        apiPath="/api/admin/companies/pending"
+        mode="pending"
+        emptyMessage="No companies awaiting approval."
+        refreshKey={listRefreshKey}
+        onOpenCompany={(c) => openCompanyModal(c, 'pending')}
+      />
+
+      <CompanyListSection
+        title="Approved companies"
+        apiPath="/api/admin/companies/approved"
+        mode="approved"
+        emptyMessage="No approved companies yet."
+        refreshKey={listRefreshKey}
+        onOpenCompany={(c) => openCompanyModal(c, 'approved')}
+        renderActions={(c) => (
           <Pressable
-            key={c.companyProfileId}
-            className="mb-2 rounded border border-slate-200 bg-white p-3"
-            onPress={() => openCompanyModal(c, 'pending')}
+            className="justify-center rounded border border-red-200 bg-white px-4"
+            onPress={() => confirmRejectApproved(c.companyProfileId, c.companyName)}
           >
-            <Text className="font-medium">{c.companyName}</Text>
-            <Text className="mt-1 text-xs text-slate-600">{c.email}</Text>
-            <Text className="mt-1 text-xs text-indigo-600">Tap to view full details</Text>
+            <Text className="text-sm text-red-700">Reject</Text>
           </Pressable>
-        ))
-      )}
+        )}
+      />
 
-      <Text className="mb-2 mt-4 text-lg font-semibold">Approved companies ({approved.length})</Text>
-      {approved.length === 0 ? (
-        <Text className="mb-4 text-sm text-slate-600">No approved companies yet.</Text>
-      ) : (
-        approved.map((c) => (
-          <View key={c.companyProfileId} className="mb-2 flex-row items-stretch gap-2">
-            <Pressable
-              className="flex-1 rounded border border-slate-200 bg-white p-3"
-              onPress={() => openCompanyModal(c, 'approved')}
-            >
-              <Text className="font-medium">{c.companyName}</Text>
-              <Text className="text-xs text-green-700">{c.approvalStatus}</Text>
-              <Text className="mt-1 text-xs text-slate-600">{c.email}</Text>
-              <Text className="mt-1 text-xs text-indigo-600">Tap to view full details</Text>
-            </Pressable>
-            <Pressable
-              className="justify-center rounded border border-red-200 bg-white px-4"
-              onPress={() => confirmRejectApproved(c.companyProfileId, c.companyName)}
-            >
-              <Text className="text-sm text-red-700">Reject</Text>
-            </Pressable>
-          </View>
-        ))
-      )}
-
-      <Text className="mb-2 mt-4 text-lg font-semibold">Rejected companies ({rejected.length})</Text>
-      {rejected.length === 0 ? (
-        <Text className="mb-4 text-sm text-slate-600">No rejected companies.</Text>
-      ) : (
-        rejected.map((c) => (
-          <View key={c.companyProfileId} className="mb-2 flex-row items-stretch gap-2">
-            <Pressable
-              className="flex-1 rounded border border-slate-200 bg-white p-3"
-              onPress={() => openCompanyModal(c, 'rejected')}
-            >
-              <Text className="font-medium">{c.companyName}</Text>
-              <Text className="text-xs text-red-700">{c.approvalStatus}</Text>
-              <Text className="mt-1 text-xs text-slate-600">{c.email}</Text>
-              <Text className="mt-1 text-xs text-indigo-600">Tap to view full details</Text>
-            </Pressable>
-            <Pressable
-              className="justify-center rounded border border-red-200 bg-white px-4"
-              onPress={() => confirmDeleteRejected(c.companyProfileId, c.companyName)}
-            >
-              <Text className="text-sm text-red-700">Delete</Text>
-            </Pressable>
-          </View>
-        ))
-      )}
+      <CompanyListSection
+        title="Rejected companies"
+        apiPath="/api/admin/companies/rejected"
+        mode="rejected"
+        emptyMessage="No rejected companies."
+        refreshKey={listRefreshKey}
+        onOpenCompany={(c) => openCompanyModal(c, 'rejected')}
+        renderActions={(c) => (
+          <Pressable
+            className="justify-center rounded border border-red-200 bg-white px-4"
+            onPress={() => confirmDeleteRejected(c.companyProfileId, c.companyName)}
+          >
+            <Text className="text-sm text-red-700">Delete</Text>
+          </Pressable>
+        )}
+      />
 
       <CompanyModal
         company={modalCompany}
@@ -355,7 +306,14 @@ export function AdminScreen() {
       ) : (
         investors.map((i) => (
           <View key={i.userId} className="mb-2 rounded bg-white p-3">
-            <Text className="font-medium">{i.email}</Text>
+            <Text className="font-medium">{i.fullName || i.email}</Text>
+            <Text className="text-xs text-slate-600">{i.email}</Text>
+            {i.phone ? <Text className="text-xs text-slate-500">Phone: {i.phone}</Text> : null}
+            {i.city && i.country ? (
+              <Text className="text-xs text-slate-500">
+                {i.city}, {i.country}
+              </Text>
+            ) : null}
           </View>
         ))
       )}

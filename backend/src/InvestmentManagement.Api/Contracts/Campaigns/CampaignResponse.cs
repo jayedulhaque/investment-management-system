@@ -5,6 +5,7 @@ public class CampaignResponse
     public Guid Id { get; set; }
     public Guid CompanyId { get; set; }
     public string CompanyName { get; set; } = string.Empty;
+    public CompanyPublicResponse? Company { get; set; }
     public decimal EquityPercentageOffered { get; set; }
     public int TotalShares { get; set; }
     public int AvailableShares { get; set; }

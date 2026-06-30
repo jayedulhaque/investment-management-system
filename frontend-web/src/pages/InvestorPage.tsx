@@ -1,49 +1,40 @@
-import { useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { apiFetch } from '../lib/api';
 import { ShareCalculator } from '../components/ShareCalculator';
+import { CompanyDetailsModal, type CompanyPublic } from '../components/CompanyDetailsModal';
+import { BookingDetailsModal } from '../components/BookingDetailsModal';
+import { InvestorBookingsSection } from '../components/InvestorBookingsSection';
+import { InvestorProfileForm } from '../components/InvestorProfileForm';
+import { ActiveCampaignsSection } from '../components/ActiveCampaignsSection';
 import { useNotificationStore } from '../store/notificationStore';
-
-type Campaign = {
-  id: string;
-  companyName: string;
-  availableShares: number;
-  pricePerShare: number;
-  minInvestmentThreshold: number;
-  totalShares: number;
-  equityPercentageOffered: number;
-};
-
-function equityPerShare(campaign: Pick<Campaign, 'equityPercentageOffered' | 'totalShares'>) {
-  return campaign.totalShares > 0 ? campaign.equityPercentageOffered / campaign.totalShares : 0;
-}
-
-type Booking = {
-  id: string;
-  campaignId: string;
-  reservedShares: number;
-  totalPrice: number;
-  status: string;
-};
+import { type BookingDetail, type BookingSummary } from '../lib/investorBookings';
+import { type CampaignSummary } from '../lib/investorCampaigns';
+import {
+  emptyInvestorRegistration,
+  investorProfileFromRegistration,
+  toInvestorProfileUpdatePayload,
+  type InvestorProfile,
+  type InvestorRegistrationInfo,
+} from '../types/investor';
 
 export function InvestorPage() {
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [selected, setSelected] = useState<Campaign | null>(null);
+  const [bookingsRefreshKey, setBookingsRefreshKey] = useState(0);
+  const [selected, setSelected] = useState<CampaignSummary | null>(null);
+  const [detailsCompany, setDetailsCompany] = useState<CompanyPublic | null>(null);
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [bookingDetail, setBookingDetail] = useState<BookingDetail | null>(null);
+  const [loadingBookingDetail, setLoadingBookingDetail] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [profile, setProfile] = useState<InvestorRegistrationInfo>(emptyInvestorRegistration());
+  const [loginEmail, setLoginEmail] = useState('');
   const fetchUnread = useNotificationStore((s) => s.fetchUnread);
 
-  const load = async () => {
-    const [c, b] = await Promise.all([
-      apiFetch<Campaign[]>('/api/campaigns'),
-      apiFetch<Booking[]>('/api/bookings/mine'),
-    ]);
-    setCampaigns(c);
-    setBookings(b);
-    await fetchUnread();
-  };
+  const refreshBookings = () => setBookingsRefreshKey((key) => key + 1);
 
   useEffect(() => {
-    load().catch((e) => setMessage(e instanceof Error ? e.message : 'Load failed'));
+    fetchUnread().catch(() => undefined);
   }, [fetchUnread]);
 
   const book = async (shares: number) => {
@@ -56,7 +47,7 @@ export function InvestorPage() {
       });
       setSelected(null);
       setMessage('Booking created (PreBooked).');
-      await load();
+      refreshBookings();
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Booking failed');
     }
@@ -64,12 +55,85 @@ export function InvestorPage() {
 
   const cancel = async (id: string) => {
     await apiFetch(`/api/bookings/${id}/cancel`, { method: 'POST' });
-    await load();
+    setSelectedBookingId(null);
+    setBookingDetail(null);
+    refreshBookings();
   };
 
   const resell = async (id: string) => {
     await apiFetch(`/api/bookings/${id}/resell`, { method: 'POST' });
-    await load();
+    setMessage('Return request sent. Waiting for company approval.');
+    setSelectedBookingId(null);
+    setBookingDetail(null);
+    refreshBookings();
+  };
+
+  const openCompanyDetails = async (campaign: CampaignSummary) => {
+    if (campaign.company) {
+      setDetailsCompany(campaign.company);
+      return;
+    }
+    const company = await apiFetch<CompanyPublic>(`/api/companies/${campaign.companyId}/public`);
+    setDetailsCompany(company);
+  };
+
+  const openCompanyDetailsById = async (companyId: string) => {
+    const company = await apiFetch<CompanyPublic>(`/api/companies/${companyId}/public`);
+    setDetailsCompany(company);
+  };
+
+  const openBookingDetails = (booking: BookingSummary) => {
+    setSelectedBookingId(booking.id);
+    setBookingDetail(null);
+    setLoadingBookingDetail(true);
+    apiFetch<BookingDetail>(`/api/bookings/${booking.id}`)
+      .then(setBookingDetail)
+      .catch(() => {
+        setMessage('Could not load booking details.');
+        setSelectedBookingId(null);
+      })
+      .finally(() => setLoadingBookingDetail(false));
+  };
+
+  const closeBookingDetails = () => {
+    setSelectedBookingId(null);
+    setBookingDetail(null);
+    setLoadingBookingDetail(false);
+  };
+
+  const openProfileEditor = async () => {
+    setEditingProfile(true);
+    setLoadingProfile(true);
+    setMessage(null);
+    try {
+      const data = await apiFetch<InvestorProfile>('/api/investors/profile');
+      setLoginEmail(data.email);
+      setProfile(investorProfileFromRegistration(data));
+    } catch {
+      setMessage('Could not load investor profile.');
+      setEditingProfile(false);
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
+
+  const updateProfileField = (field: keyof InvestorRegistrationInfo, value: string) => {
+    setProfile((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const saveProfile = async (e: FormEvent) => {
+    e.preventDefault();
+    setMessage(null);
+    try {
+      await apiFetch('/api/investors/profile', {
+        method: 'PUT',
+        body: JSON.stringify(toInvestorProfileUpdatePayload(profile)),
+      });
+      setMessage('Investor profile updated.');
+      setEditingProfile(false);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Failed to update profile');
+    }
   };
 
   return (
@@ -77,66 +141,76 @@ export function InvestorPage() {
       <h1 className="text-2xl font-bold">Investor dashboard</h1>
       {message && <p className="rounded bg-blue-50 p-2 text-sm text-blue-800">{message}</p>}
 
-      <section>
-        <h2 className="mb-3 font-semibold">Active campaigns</h2>
-        <div className="grid gap-3">
-          {campaigns.map((c) => (
+      <section className="rounded-lg bg-white p-4 shadow">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-semibold">My profile</h2>
+          {!editingProfile && (
             <button
-              key={c.id}
               type="button"
-              className="rounded-lg border bg-white p-4 text-left hover:border-indigo-400"
-              onClick={() => setSelected(c)}
+              onClick={() => openProfileEditor().catch(() => undefined)}
+              className="rounded bg-indigo-600 px-4 py-2 text-sm text-white"
             >
-              <p className="font-medium">{c.companyName}</p>
-              <p className="text-sm text-slate-600">
-                {c.equityPercentageOffered}% of company · {c.availableShares} / {c.totalShares} share units
-              </p>
-              <p className="text-sm text-slate-600">
-                {c.pricePerShare} BDT/share · min {c.minInvestmentThreshold} BDT ·{' '}
-                {equityPerShare(c).toFixed(4)}% company per share
-              </p>
+              Edit profile
             </button>
-          ))}
+          )}
         </div>
-        {selected && (
-          <div className="mt-4">
-            <ShareCalculator
-              pricePerShare={selected.pricePerShare}
-              minInvestmentThreshold={selected.minInvestmentThreshold}
-              maxShares={selected.availableShares}
-              onSubmit={(shares) => book(shares)}
+        {editingProfile && loadingProfile && (
+          <p className="text-sm text-slate-600">Loading profile…</p>
+        )}
+        {editingProfile && !loadingProfile && (
+          <form onSubmit={saveProfile} className="space-y-4">
+            <InvestorProfileForm
+              value={profile}
+              onChange={updateProfileField}
+              loginEmail={loginEmail}
             />
-            <button type="button" className="mt-2 text-sm text-slate-500" onClick={() => setSelected(null)}>
-              Close
-            </button>
-          </div>
+            <div className="flex gap-2">
+              <button type="submit" className="rounded bg-indigo-600 px-4 py-2 text-white">
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingProfile(false)}
+                className="rounded border px-4 py-2 text-slate-700"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
         )}
       </section>
 
-      <section>
-        <h2 className="mb-3 font-semibold">My bookings</h2>
-        <ul className="space-y-2">
-          {bookings.map((b) => (
-            <li key={b.id} className="rounded border bg-white p-3 text-sm">
-              <p>
-                {b.reservedShares} shares · {b.totalPrice.toFixed(2)} BDT · <strong>{b.status}</strong>
-              </p>
-              <div className="mt-2 flex gap-2">
-                {(b.status === 'PreBooked' || b.status === 'Contacted') && (
-                  <button type="button" className="text-red-600" onClick={() => cancel(b.id)}>
-                    Cancel / free
-                  </button>
-                )}
-                {b.status === 'Confirmed' && (
-                  <button type="button" className="text-amber-700" onClick={() => resell(b.id)}>
-                    Return shares (resell)
-                  </button>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <ActiveCampaignsSection
+        refreshKey={bookingsRefreshKey}
+        onBookShares={setSelected}
+        onViewCompanyDetails={(campaign) => openCompanyDetails(campaign).catch(() => undefined)}
+      />
+      {selected && (
+        <div className="mt-4">
+          <ShareCalculator
+            pricePerShare={selected.pricePerShare}
+            minInvestmentThreshold={selected.minInvestmentThreshold}
+            maxShares={selected.availableShares}
+            onSubmit={(shares) => book(shares)}
+          />
+          <button type="button" className="mt-2 text-sm text-slate-500" onClick={() => setSelected(null)}>
+            Close
+          </button>
+        </div>
+      )}
+
+      <CompanyDetailsModal company={detailsCompany} onClose={() => setDetailsCompany(null)} />
+
+      <InvestorBookingsSection refreshKey={bookingsRefreshKey} onSelectBooking={openBookingDetails} />
+
+      <BookingDetailsModal
+        booking={bookingDetail}
+        loading={loadingBookingDetail && selectedBookingId !== null}
+        onClose={closeBookingDetails}
+        onCancel={(id) => cancel(id).catch(() => undefined)}
+        onResell={(id) => resell(id).catch(() => undefined)}
+        onViewCompany={(companyId) => openCompanyDetailsById(companyId).catch(() => undefined)}
+      />
     </div>
   );
 }

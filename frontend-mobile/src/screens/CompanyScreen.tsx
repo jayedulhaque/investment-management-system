@@ -2,7 +2,20 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { apiFetch } from '../lib/api';
 import { PaymentPanel } from '../components/PaymentPanel';
+import { CompanyBookingsSection } from '../components/CompanyBookingsSection';
+import { CompanyBookingDetailsModal } from '../components/CompanyBookingDetailsModal';
 import { useAuthStore } from '../store/authStore';
+import {
+  companyProfileFromRegistration,
+  emptyCompanyRegistration,
+  toCompanyProfileUpdatePayload,
+  type CompanyProfile,
+  type CompanyRegistrationInfo,
+} from '../types/company';
+import {
+  type CompanyBookingDetail,
+  type CompanyBookingSummary,
+} from '../lib/companyBookings';
 
 function FormField({
   label,
@@ -44,21 +57,22 @@ function equityPerShare(campaign: Pick<Campaign, 'equityPercentageOffered' | 'to
   return campaign.totalShares > 0 ? campaign.equityPercentageOffered / campaign.totalShares : 0;
 }
 
-type Booking = {
-  id: string;
-  reservedShares: number;
-  totalPrice: number;
-  status: string;
-};
-
 export function CompanyScreen() {
   const logout = useAuthStore((s) => s.logout);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookingsRefreshKey, setBookingsRefreshKey] = useState(0);
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [bookingDetail, setBookingDetail] = useState<CompanyBookingDetail | null>(null);
+  const [loadingBookingDetail, setLoadingBookingDetail] = useState(false);
   const [pending, setPending] = useState<{
     id: string;
     payment: { transactionId: string; redirectUrl: string };
   } | null>(null);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [profile, setProfile] = useState<CompanyRegistrationInfo>(emptyCompanyRegistration());
+  const [loginEmail, setLoginEmail] = useState('');
+  const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [form, setForm] = useState({
     equityPercentageOffered: '50',
     totalShares: '500',
@@ -70,13 +84,11 @@ export function CompanyScreen() {
     +form.totalShares > 0 ? +form.equityPercentageOffered / +form.totalShares : 0;
 
   const load = useCallback(async () => {
-    const [c, b] = await Promise.all([
-      apiFetch<Campaign[]>('/api/campaigns/company'),
-      apiFetch<Booking[]>('/api/bookings/company'),
-    ]);
-    setCampaigns(c);
-    setBookings(b);
+    const campaignsData = await apiFetch<Campaign[]>('/api/campaigns/company');
+    setCampaigns(campaignsData);
   }, []);
+
+  const refreshBookings = () => setBookingsRefreshKey((key) => key + 1);
 
   useEffect(() => {
     load().catch(() => undefined);
@@ -113,7 +125,45 @@ export function CompanyScreen() {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     });
+    if (selectedBookingId === bookingId) {
+      reloadBookingDetails(bookingId);
+    }
+    refreshBookings();
+  };
+
+  const approveResell = async (bookingId: string) => {
+    await apiFetch(`/api/bookings/${bookingId}/approve-resell`, { method: 'POST' });
+    closeBookingDetails();
+    refreshBookings();
     await load();
+  };
+
+  const rejectResell = async (bookingId: string) => {
+    await apiFetch(`/api/bookings/${bookingId}/reject-resell`, { method: 'POST' });
+    if (selectedBookingId === bookingId) {
+      reloadBookingDetails(bookingId);
+    }
+    refreshBookings();
+  };
+
+  const openBookingDetails = (booking: CompanyBookingSummary) => {
+    reloadBookingDetails(booking.id);
+  };
+
+  const reloadBookingDetails = (bookingId: string) => {
+    setSelectedBookingId(bookingId);
+    setBookingDetail(null);
+    setLoadingBookingDetail(true);
+    apiFetch<CompanyBookingDetail>(`/api/bookings/company/${bookingId}`)
+      .then(setBookingDetail)
+      .catch(() => setSelectedBookingId(null))
+      .finally(() => setLoadingBookingDetail(false));
+  };
+
+  const closeBookingDetails = () => {
+    setSelectedBookingId(null);
+    setBookingDetail(null);
+    setLoadingBookingDetail(false);
   };
 
   const deleteCampaign = (campaignId: string) => {
@@ -135,12 +185,158 @@ export function CompanyScreen() {
     ]);
   };
 
+  const openProfileEditor = async () => {
+    setEditingProfile(true);
+    setLoadingProfile(true);
+    setProfileMessage(null);
+    try {
+      const data = await apiFetch<CompanyProfile>('/api/companies/profile');
+      setLoginEmail(data.email);
+      setProfile(companyProfileFromRegistration(data));
+    } catch {
+      setProfileMessage('Could not load company profile.');
+      setEditingProfile(false);
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
+
+  const updateProfileField = (field: keyof CompanyRegistrationInfo, value: string) => {
+    setProfile((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const saveProfile = async () => {
+    setProfileMessage(null);
+    try {
+      await apiFetch('/api/companies/profile', {
+        method: 'PUT',
+        body: JSON.stringify(toCompanyProfileUpdatePayload(profile)),
+      });
+      setProfileMessage('Company profile updated.');
+      setEditingProfile(false);
+    } catch (e) {
+      setProfileMessage(e instanceof Error ? e.message : 'Failed to update profile');
+    }
+  };
+
   return (
     <ScrollView className="flex-1 bg-slate-100 p-4">
       <View className="flex-row justify-between mb-4">
         <Text className="text-xl font-bold">Company</Text>
         <Pressable onPress={logout}><Text className="text-red-600">Logout</Text></Pressable>
       </View>
+
+      <View className="mb-4 rounded-lg bg-white p-4 shadow-sm">
+        <View className="mb-3 flex-row items-center justify-between">
+          <Text className="text-lg font-semibold">Company profile</Text>
+          {!editingProfile && (
+            <Pressable className="rounded bg-indigo-600 px-3 py-2" onPress={() => openProfileEditor().catch(() => undefined)}>
+              <Text className="text-sm text-white">Edit profile</Text>
+            </Pressable>
+          )}
+        </View>
+        {profileMessage && <Text className="mb-2 text-sm text-blue-800">{profileMessage}</Text>}
+        {editingProfile && loadingProfile && (
+          <Text className="text-sm text-slate-600">Loading profile…</Text>
+        )}
+        {editingProfile && !loadingProfile && (
+          <>
+            <Text className="mb-1 text-sm text-slate-500">Login email: {loginEmail}</Text>
+            <Text className="mb-2 font-semibold text-slate-700">Company identity</Text>
+            <TextInput
+              className="mb-2 rounded border border-slate-300 bg-white p-2.5"
+              placeholder="Company name *"
+              value={profile.companyName}
+              onChangeText={(v) => updateProfileField('companyName', v)}
+            />
+            <TextInput
+              className="mb-2 rounded border border-slate-300 bg-white p-2.5"
+              placeholder="Legal name (optional)"
+              value={profile.legalName}
+              onChangeText={(v) => updateProfileField('legalName', v)}
+            />
+            <TextInput
+              className="mb-2 rounded border border-slate-300 bg-white p-2.5"
+              placeholder="Registration number (optional)"
+              value={profile.registrationNumber}
+              onChangeText={(v) => updateProfileField('registrationNumber', v)}
+            />
+            <TextInput
+              className="mb-4 rounded border border-slate-300 bg-white p-2.5"
+              placeholder="Industry (optional)"
+              value={profile.industry}
+              onChangeText={(v) => updateProfileField('industry', v)}
+            />
+            <Text className="mb-2 font-semibold text-slate-700">Contact & location</Text>
+            <TextInput
+              className="mb-2 rounded border border-slate-300 bg-white p-2.5"
+              placeholder="Phone (optional)"
+              value={profile.phone}
+              onChangeText={(v) => updateProfileField('phone', v)}
+              keyboardType="phone-pad"
+            />
+            <TextInput
+              className="mb-2 rounded border border-slate-300 bg-white p-2.5"
+              placeholder="Contact email (optional)"
+              value={profile.contactEmail}
+              onChangeText={(v) => updateProfileField('contactEmail', v)}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+            <TextInput
+              className="mb-2 rounded border border-slate-300 bg-white p-2.5"
+              placeholder="Website (optional)"
+              value={profile.website}
+              onChangeText={(v) => updateProfileField('website', v)}
+              autoCapitalize="none"
+            />
+            <TextInput
+              className="mb-2 rounded border border-slate-300 bg-white p-2.5"
+              placeholder="Address (optional)"
+              value={profile.address}
+              onChangeText={(v) => updateProfileField('address', v)}
+            />
+            <TextInput
+              className="mb-2 rounded border border-slate-300 bg-white p-2.5"
+              placeholder="City (optional)"
+              value={profile.city}
+              onChangeText={(v) => updateProfileField('city', v)}
+            />
+            <TextInput
+              className="mb-4 rounded border border-slate-300 bg-white p-2.5"
+              placeholder="Country (optional)"
+              value={profile.country}
+              onChangeText={(v) => updateProfileField('country', v)}
+            />
+            <Text className="mb-2 font-semibold text-slate-700">About & documents</Text>
+            <TextInput
+              className="mb-2 rounded border border-slate-300 bg-white p-2.5"
+              placeholder="Company description *"
+              value={profile.description}
+              onChangeText={(v) => updateProfileField('description', v)}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+            <TextInput
+              className="mb-4 rounded border border-slate-300 bg-white p-2.5"
+              placeholder="Documentation URL *"
+              value={profile.documentationUrl}
+              onChangeText={(v) => updateProfileField('documentationUrl', v)}
+              autoCapitalize="none"
+            />
+            <View className="flex-row gap-3">
+              <Pressable className="rounded bg-indigo-600 px-4 py-2" onPress={saveProfile}>
+                <Text className="text-white">Save</Text>
+              </Pressable>
+              <Pressable className="rounded border border-slate-300 px-4 py-2" onPress={() => setEditingProfile(false)}>
+                <Text className="text-slate-700">Cancel</Text>
+              </Pressable>
+            </View>
+          </>
+        )}
+      </View>
+
       {campaigns.length === 0 ? (
         <View className="mb-4 rounded-lg bg-white p-4 shadow-sm">
           <Text className="mb-1 text-lg font-semibold">Create campaign</Text>
@@ -238,30 +434,22 @@ export function CompanyScreen() {
           ))
         )}
       </View>
-      <View className="mb-4 rounded-lg bg-white p-4 shadow-sm">
-        <Text className="mb-3 text-lg font-semibold">Bookings on your campaign</Text>
-        {bookings.length === 0 ? (
-          <Text className="text-sm text-slate-600">No bookings yet.</Text>
-        ) : (
-          bookings.map((b) => (
-            <View key={b.id} className="mb-2 rounded border border-slate-200 p-3">
-              <Text className="text-sm">
-                {b.reservedShares} shares · {b.totalPrice.toFixed(2)} BDT · {b.status}
-              </Text>
-              {b.status === 'PreBooked' && (
-                <Pressable className="mt-2" onPress={() => updateStatus(b.id, 'Contacted')}>
-                  <Text className="text-indigo-600">Mark contacted</Text>
-                </Pressable>
-              )}
-              {b.status === 'Contacted' && (
-                <Pressable className="mt-2" onPress={() => updateStatus(b.id, 'Confirmed')}>
-                  <Text className="text-indigo-600">Confirm</Text>
-                </Pressable>
-              )}
-            </View>
-          ))
-        )}
-      </View>
+      <CompanyBookingsSection
+        refreshKey={bookingsRefreshKey}
+        onSelectBooking={openBookingDetails}
+        onUpdateStatus={(id, status) => updateStatus(id, status).catch(() => undefined)}
+        onApproveResell={(id) => approveResell(id).catch(() => undefined)}
+        onRejectResell={(id) => rejectResell(id).catch(() => undefined)}
+      />
+      <CompanyBookingDetailsModal
+        booking={bookingDetail}
+        loading={loadingBookingDetail && selectedBookingId !== null}
+        visible={selectedBookingId !== null}
+        onClose={closeBookingDetails}
+        onUpdateStatus={(id, status) => updateStatus(id, status).catch(() => undefined)}
+        onApproveResell={(id) => approveResell(id).catch(() => undefined)}
+        onRejectResell={(id) => rejectResell(id).catch(() => undefined)}
+      />
     </ScrollView>
   );
 }

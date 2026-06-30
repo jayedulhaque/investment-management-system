@@ -6,5 +6,6 @@ public enum BookingStatus
     Contacted,
     Confirmed,
     Cancelled,
+    ResellPending,
     Returned
 }

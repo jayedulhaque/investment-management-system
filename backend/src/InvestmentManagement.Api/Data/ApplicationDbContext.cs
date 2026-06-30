@@ -7,6 +7,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 {
     public DbSet<User> Users => Set<User>();
     public DbSet<CompanyProfile> CompanyProfiles => Set<CompanyProfile>();
+    public DbSet<InvestorProfile> InvestorProfiles => Set<InvestorProfile>();
     public DbSet<Campaign> Campaigns => Set<Campaign>();
     public DbSet<Booking> Bookings => Set<Booking>();
     public DbSet<Notification> Notifications => Set<Notification>();

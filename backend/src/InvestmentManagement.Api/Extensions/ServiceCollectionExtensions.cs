@@ -27,6 +27,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IAdminService, AdminService>();
         services.AddScoped<ICampaignService, CampaignService>();
+        services.AddScoped<ICompanyService, CompanyService>();
+        services.AddScoped<IInvestorService, InvestorService>();
         services.AddScoped<IBookingService, BookingService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IAuthorizationHandler, ApprovedCompanyAuthorizationHandler>();

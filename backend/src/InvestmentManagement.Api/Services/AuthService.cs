@@ -40,7 +40,23 @@ public class AuthService(
         };
         user.PasswordHash = passwordService.HashPassword(user, request.Password);
 
+        var profile = new InvestorProfile
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            FullName = request.FullName.Trim(),
+            Phone = request.Phone.Trim(),
+            NationalId = request.NationalId.Trim(),
+            DateOfBirth = request.DateOfBirth,
+            Occupation = TrimOrNull(request.Occupation),
+            Address = request.Address.Trim(),
+            City = request.City.Trim(),
+            Country = request.Country.Trim(),
+            ContactEmail = NormalizeOptionalEmail(request.ContactEmail)
+        };
+
         db.Users.Add(user);
+        db.InvestorProfiles.Add(profile);
         await db.SaveChangesAsync(cancellationToken);
 
         return BuildAuthResponse(user);

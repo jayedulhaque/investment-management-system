@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using InvestmentManagement.Api.Contracts.Admin;
+using InvestmentManagement.Api.Contracts.Common;
 using InvestmentManagement.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -36,27 +37,30 @@ public class AdminController(IAdminService adminService) : ControllerBase
     }
 
     [HttpGet("companies/pending")]
-    [ProducesResponseType(typeof(IReadOnlyList<PendingCompanyResponse>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<PendingCompanyResponse>>> GetPendingCompanies(CancellationToken cancellationToken)
+    [ProducesResponseType(typeof(PagedResponse<PendingCompanyResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PagedResponse<PendingCompanyResponse>>> GetPendingCompanies(
+        [FromQuery] CompanyListQuery query,
+        CancellationToken cancellationToken)
     {
-        var companies = await adminService.GetPendingCompaniesAsync(cancellationToken);
-        return Ok(companies);
+        return Ok(await adminService.GetPendingCompaniesAsync(query, cancellationToken));
     }
 
     [HttpGet("companies/approved")]
-    [ProducesResponseType(typeof(IReadOnlyList<ApprovedCompanyResponse>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<ApprovedCompanyResponse>>> GetApprovedCompanies(
+    [ProducesResponseType(typeof(PagedResponse<ApprovedCompanyResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PagedResponse<ApprovedCompanyResponse>>> GetApprovedCompanies(
+        [FromQuery] CompanyListQuery query,
         CancellationToken cancellationToken)
     {
-        return Ok(await adminService.GetApprovedCompaniesAsync(cancellationToken));
+        return Ok(await adminService.GetApprovedCompaniesAsync(query, cancellationToken));
     }
 
     [HttpGet("companies/rejected")]
-    [ProducesResponseType(typeof(IReadOnlyList<RejectedCompanyResponse>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<RejectedCompanyResponse>>> GetRejectedCompanies(
+    [ProducesResponseType(typeof(PagedResponse<RejectedCompanyResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PagedResponse<RejectedCompanyResponse>>> GetRejectedCompanies(
+        [FromQuery] CompanyListQuery query,
         CancellationToken cancellationToken)
     {
-        return Ok(await adminService.GetRejectedCompaniesAsync(cancellationToken));
+        return Ok(await adminService.GetRejectedCompaniesAsync(query, cancellationToken));
     }
 
     [HttpGet("companies/{id:guid}")]

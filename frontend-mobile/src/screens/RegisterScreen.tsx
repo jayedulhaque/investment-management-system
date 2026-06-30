@@ -3,6 +3,7 @@ import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAuthStore } from '../store/authStore';
 import { emptyCompanyRegistration } from '../types/company';
+import { emptyInvestorRegistration } from '../types/investor';
 import type { RootStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
@@ -13,17 +14,22 @@ export function RegisterScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [company, setCompany] = useState(emptyCompanyRegistration);
+  const [investor, setInvestor] = useState(emptyInvestorRegistration);
   const [error, setError] = useState<string | null>(null);
 
   const updateCompany = (field: keyof ReturnType<typeof emptyCompanyRegistration>, value: string) => {
     setCompany((prev) => ({ ...prev, [field]: value }));
   };
 
+  const updateInvestor = (field: keyof ReturnType<typeof emptyInvestorRegistration>, value: string) => {
+    setInvestor((prev) => ({ ...prev, [field]: value }));
+  };
+
   const onRegister = async () => {
     setError(null);
     try {
       if (role === 'Investor') {
-        await registerInvestor(email, password);
+        await registerInvestor(email, password, investor);
         navigation.replace('Investor');
         return;
       }
@@ -61,6 +67,71 @@ export function RegisterScreen({ navigation }: Props) {
         value={password}
         onChangeText={setPassword}
       />
+
+      {role === 'Investor' && (
+        <>
+          <Text className="mb-2 font-semibold text-slate-700">Personal identity</Text>
+          <TextInput
+            className="mb-2 rounded border bg-white p-3"
+            placeholder="Full name *"
+            value={investor.fullName}
+            onChangeText={(v) => updateInvestor('fullName', v)}
+          />
+          <TextInput
+            className="mb-2 rounded border bg-white p-3"
+            placeholder="National ID (NID) *"
+            value={investor.nationalId}
+            onChangeText={(v) => updateInvestor('nationalId', v)}
+          />
+          <TextInput
+            className="mb-2 rounded border bg-white p-3"
+            placeholder="Date of birth (YYYY-MM-DD, optional)"
+            value={investor.dateOfBirth}
+            onChangeText={(v) => updateInvestor('dateOfBirth', v)}
+          />
+          <TextInput
+            className="mb-4 rounded border bg-white p-3"
+            placeholder="Occupation (optional)"
+            value={investor.occupation}
+            onChangeText={(v) => updateInvestor('occupation', v)}
+          />
+
+          <Text className="mb-2 font-semibold text-slate-700">Contact & location</Text>
+          <TextInput
+            className="mb-2 rounded border bg-white p-3"
+            placeholder="Phone *"
+            value={investor.phone}
+            onChangeText={(v) => updateInvestor('phone', v)}
+            keyboardType="phone-pad"
+          />
+          <TextInput
+            className="mb-2 rounded border bg-white p-3"
+            placeholder="Contact email (optional)"
+            value={investor.contactEmail}
+            onChangeText={(v) => updateInvestor('contactEmail', v)}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+          <TextInput
+            className="mb-2 rounded border bg-white p-3"
+            placeholder="Address *"
+            value={investor.address}
+            onChangeText={(v) => updateInvestor('address', v)}
+          />
+          <TextInput
+            className="mb-2 rounded border bg-white p-3"
+            placeholder="City *"
+            value={investor.city}
+            onChangeText={(v) => updateInvestor('city', v)}
+          />
+          <TextInput
+            className="mb-4 rounded border bg-white p-3"
+            placeholder="Country *"
+            value={investor.country}
+            onChangeText={(v) => updateInvestor('country', v)}
+          />
+        </>
+      )}
 
       {role === 'Company' && (
         <>

@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { emptyCompanyRegistration } from '../types/company';
+import { emptyInvestorRegistration } from '../types/investor';
 
 export function RegisterPage() {
   const { registerInvestor, registerCompany } = useAuthStore();
@@ -10,10 +11,15 @@ export function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [company, setCompany] = useState(emptyCompanyRegistration);
+  const [investor, setInvestor] = useState(emptyInvestorRegistration);
   const [error, setError] = useState<string | null>(null);
 
   const updateCompany = (field: keyof ReturnType<typeof emptyCompanyRegistration>, value: string) => {
     setCompany((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const updateInvestor = (field: keyof ReturnType<typeof emptyInvestorRegistration>, value: string) => {
+    setInvestor((prev) => ({ ...prev, [field]: value }));
   };
 
   const onSubmit = async (e: FormEvent) => {
@@ -21,7 +27,7 @@ export function RegisterPage() {
     setError(null);
     try {
       if (role === 'Investor') {
-        await registerInvestor(email, password);
+        await registerInvestor(email, password, investor);
         navigate('/investor');
         return;
       }
@@ -33,7 +39,7 @@ export function RegisterPage() {
   };
 
   return (
-    <div className={`mx-auto rounded-lg bg-white p-6 shadow ${role === 'Company' ? 'max-w-2xl' : 'max-w-md'}`}>
+    <div className="mx-auto max-w-2xl rounded-lg bg-white p-6 shadow">
       <h1 className="mb-4 text-xl font-bold">Register</h1>
       <div className="mb-4 flex gap-2">
         {(['Investor', 'Company'] as const).map((r) => (
@@ -73,6 +79,107 @@ export function RegisterPage() {
             <span className="mt-1 block text-xs text-slate-500">Minimum 8 characters</span>
           </label>
         </fieldset>
+
+        {role === 'Investor' && (
+          <>
+            <fieldset className="space-y-3">
+              <legend className="mb-1 text-sm font-semibold text-slate-700">Personal identity</legend>
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium text-slate-700">Full name</span>
+                <input
+                  className="w-full rounded border px-3 py-2"
+                  value={investor.fullName}
+                  onChange={(e) => updateInvestor('fullName', e.target.value)}
+                  required
+                />
+              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="mb-1 block font-medium text-slate-700">National ID (NID)</span>
+                  <input
+                    className="w-full rounded border px-3 py-2"
+                    value={investor.nationalId}
+                    onChange={(e) => updateInvestor('nationalId', e.target.value)}
+                    required
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block font-medium text-slate-700">Date of birth (optional)</span>
+                  <input
+                    type="date"
+                    className="w-full rounded border px-3 py-2"
+                    value={investor.dateOfBirth ?? ''}
+                    onChange={(e) => updateInvestor('dateOfBirth', e.target.value)}
+                  />
+                </label>
+              </div>
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium text-slate-700">Occupation (optional)</span>
+                <input
+                  className="w-full rounded border px-3 py-2"
+                  value={investor.occupation}
+                  onChange={(e) => updateInvestor('occupation', e.target.value)}
+                  placeholder="e.g. Software engineer, Business owner"
+                />
+              </label>
+            </fieldset>
+
+            <fieldset className="space-y-3">
+              <legend className="mb-1 text-sm font-semibold text-slate-700">Contact & location</legend>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="mb-1 block font-medium text-slate-700">Phone</span>
+                  <input
+                    type="tel"
+                    className="w-full rounded border px-3 py-2"
+                    value={investor.phone}
+                    onChange={(e) => updateInvestor('phone', e.target.value)}
+                    required
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block font-medium text-slate-700">Contact email (optional)</span>
+                  <input
+                    type="email"
+                    className="w-full rounded border px-3 py-2"
+                    value={investor.contactEmail}
+                    onChange={(e) => updateInvestor('contactEmail', e.target.value)}
+                  />
+                  <span className="mt-1 block text-xs text-slate-500">If different from login email</span>
+                </label>
+              </div>
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium text-slate-700">Address</span>
+                <input
+                  className="w-full rounded border px-3 py-2"
+                  value={investor.address}
+                  onChange={(e) => updateInvestor('address', e.target.value)}
+                  required
+                />
+              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="mb-1 block font-medium text-slate-700">City</span>
+                  <input
+                    className="w-full rounded border px-3 py-2"
+                    value={investor.city}
+                    onChange={(e) => updateInvestor('city', e.target.value)}
+                    required
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block font-medium text-slate-700">Country</span>
+                  <input
+                    className="w-full rounded border px-3 py-2"
+                    value={investor.country}
+                    onChange={(e) => updateInvestor('country', e.target.value)}
+                    required
+                  />
+                </label>
+              </div>
+            </fieldset>
+          </>
+        )}
 
         {role === 'Company' && (
           <>
