@@ -6,6 +6,7 @@ import { BookingDetailsModal } from '../components/BookingDetailsModal';
 import { InvestorBookingsSection } from '../components/InvestorBookingsSection';
 import { InvestorProfileForm } from '../components/InvestorProfileForm';
 import { ActiveCampaignsSection } from '../components/ActiveCampaignsSection';
+import { ClosedCampaignsSection } from '../components/ClosedCampaignsSection';
 import { useNotificationStore } from '../store/notificationStore';
 import { type BookingDetail, type BookingSummary } from '../lib/investorBookings';
 import { type CampaignSummary } from '../lib/investorCampaigns';
@@ -29,16 +30,20 @@ export function InvestorPage() {
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [profile, setProfile] = useState<InvestorRegistrationInfo>(emptyInvestorRegistration());
   const [loginEmail, setLoginEmail] = useState('');
+  const [canBook, setCanBook] = useState(true);
   const fetchUnread = useNotificationStore((s) => s.fetchUnread);
 
   const refreshBookings = () => setBookingsRefreshKey((key) => key + 1);
 
   useEffect(() => {
     fetchUnread().catch(() => undefined);
+    apiFetch<InvestorProfile>('/api/investors/profile')
+      .then((data) => setCanBook(data.isActive))
+      .catch(() => undefined);
   }, [fetchUnread]);
 
   const book = async (shares: number) => {
-    if (!selected) return;
+    if (!selected || !canBook) return;
     setMessage(null);
     try {
       await apiFetch('/api/bookings', {
@@ -182,10 +187,11 @@ export function InvestorPage() {
 
       <ActiveCampaignsSection
         refreshKey={bookingsRefreshKey}
+        canBook={canBook}
         onBookShares={setSelected}
         onViewCompanyDetails={(campaign) => openCompanyDetails(campaign).catch(() => undefined)}
       />
-      {selected && (
+      {selected && canBook && (
         <div className="mt-4">
           <ShareCalculator
             pricePerShare={selected.pricePerShare}
@@ -198,6 +204,11 @@ export function InvestorPage() {
           </button>
         </div>
       )}
+
+      <ClosedCampaignsSection
+        refreshKey={bookingsRefreshKey}
+        onViewCompanyDetails={(campaign) => openCompanyDetails(campaign).catch(() => undefined)}
+      />
 
       <CompanyDetailsModal company={detailsCompany} onClose={() => setDetailsCompany(null)} />
 

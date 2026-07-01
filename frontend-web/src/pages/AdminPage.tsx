@@ -1,22 +1,12 @@
 import { FormEvent, useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { CompanyListSection } from '../components/CompanyListSection';
+import { InvestorListSection } from '../components/InvestorListSection';
+import { AdminCampaignListSection } from '../components/AdminCampaignListSection';
+import { AdminCampaignDetailsModal } from '../components/AdminCampaignDetailsModal';
 import { apiFetch } from '../lib/api';
 import type { CompanyReview } from '../lib/adminCompanyList';
-
-type Investor = {
-  userId: string;
-  email: string;
-  fullName: string;
-  phone: string;
-  nationalId: string;
-  dateOfBirth?: string | null;
-  occupation?: string | null;
-  address: string;
-  city: string;
-  country: string;
-  contactEmail?: string | null;
-};
+import type { CampaignSummary } from '../lib/adminCampaigns';
 
 function displayValue(value?: string | null) {
   const trimmed = value?.trim();
@@ -195,7 +185,6 @@ function CompanyModal({
 }
 
 export function AdminPage() {
-  const [investors, setInvestors] = useState<Investor[]>([]);
   const [listRefreshKey, setListRefreshKey] = useState(0);
   const [profile, setProfile] = useState({ email: '', password: '', bKashNumber: '' });
   const [editingProfile, setEditingProfile] = useState(false);
@@ -205,17 +194,13 @@ export function AdminPage() {
   const [modalMode, setModalMode] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [detailLoadError, setDetailLoadError] = useState<string | null>(null);
   const [loadingCompanyDetail, setLoadingCompanyDetail] = useState(false);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
 
   const refreshCompanyLists = () => setListRefreshKey((key) => key + 1);
 
-  const loadInvestors = () =>
-    apiFetch<Investor[]>('/api/admin/investors').then((investorList) => {
-      setInvestors(investorList);
-    });
-
-  useEffect(() => {
-    loadInvestors().catch(() => undefined);
-  }, []);
+  const openCampaignDetail = (campaign: CampaignSummary) => {
+    setSelectedCampaignId(campaign.id);
+  };
 
   const openCompanyModal = (company: CompanyReview, mode: 'pending' | 'approved' | 'rejected') => {
     setModalMode(mode);
@@ -448,27 +433,24 @@ export function AdminPage() {
         }
       />
 
-      <section>
-        <h2 className="mb-3 font-semibold">Investors ({investors.length})</h2>
-        {investors.length === 0 ? (
-          <p className="text-sm text-slate-600">No investors registered yet.</p>
-        ) : (
-          <ul className="space-y-2">
-            {investors.map((i) => (
-              <li key={i.userId} className="rounded border bg-white p-3 text-sm">
-                <p className="font-medium">{i.fullName || i.email}</p>
-                <p className="text-xs text-slate-600">{i.email}</p>
-                {i.phone && <p className="text-xs text-slate-500">Phone: {i.phone}</p>}
-                {i.city && i.country && (
-                  <p className="text-xs text-slate-500">
-                    {i.city}, {i.country}
-                  </p>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <AdminCampaignListSection
+        mode="active"
+        refreshKey={listRefreshKey}
+        onSelectCampaign={openCampaignDetail}
+      />
+
+      <AdminCampaignListSection
+        mode="closed"
+        refreshKey={listRefreshKey}
+        onSelectCampaign={openCampaignDetail}
+      />
+
+      <AdminCampaignDetailsModal
+        campaignId={selectedCampaignId}
+        onClose={() => setSelectedCampaignId(null)}
+      />
+
+      <InvestorListSection refreshKey={listRefreshKey} />
     </div>
   );
 }

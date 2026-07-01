@@ -5,6 +5,7 @@ import { CompanyDetailsModal, type CompanyPublic } from '../components/CompanyDe
 import { BookingDetailsModal } from '../components/BookingDetailsModal';
 import { InvestorBookingsSection } from '../components/InvestorBookingsSection';
 import { ActiveCampaignsSection } from '../components/ActiveCampaignsSection';
+import { ClosedCampaignsSection } from '../components/ClosedCampaignsSection';
 import { ShareCalculator } from '../components/ShareCalculator';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
@@ -32,19 +33,23 @@ export function InvestorScreen() {
   const [profile, setProfile] = useState<InvestorRegistrationInfo>(emptyInvestorRegistration());
   const [loginEmail, setLoginEmail] = useState('');
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
+  const [canBook, setCanBook] = useState(true);
 
   const refreshBookings = () => setBookingsRefreshKey((key) => key + 1);
 
   useEffect(() => {
     connectHub();
     fetchUnread().catch(() => undefined);
+    apiFetch<InvestorProfile>('/api/investors/profile')
+      .then((data) => setCanBook(data.isActive))
+      .catch(() => undefined);
     return () => {
       void disconnectHub();
     };
   }, [connectHub, disconnectHub, fetchUnread]);
 
   const book = async (shares: number) => {
-    if (!selected) return;
+    if (!selected || !canBook) return;
     await apiFetch('/api/bookings', {
       method: 'POST',
       body: JSON.stringify({ campaignId: selected.id, reservedShares: shares }),
@@ -236,10 +241,11 @@ export function InvestorScreen() {
 
       <ActiveCampaignsSection
         refreshKey={bookingsRefreshKey}
+        canBook={canBook}
         onBookShares={setSelected}
         onViewCompanyDetails={(campaign) => openCompanyDetails(campaign).catch(() => undefined)}
       />
-      {selected && (
+      {selected && canBook && (
         <ShareCalculator
           pricePerShare={selected.pricePerShare}
           minInvestmentThreshold={selected.minInvestmentThreshold}
@@ -247,6 +253,10 @@ export function InvestorScreen() {
           onSubmit={book}
         />
       )}
+      <ClosedCampaignsSection
+        refreshKey={bookingsRefreshKey}
+        onViewCompanyDetails={(campaign) => openCompanyDetails(campaign).catch(() => undefined)}
+      />
       <InvestorBookingsSection refreshKey={bookingsRefreshKey} onSelectBooking={openBookingDetails} />
       <CompanyDetailsModal
         company={detailsCompany}

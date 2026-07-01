@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { apiFetch } from '../lib/api';
 import {
-  activeCampaignsUrl,
+  closedCampaignsUrl,
   emptyCampaignListQuery,
   equityPerShare,
   type CampaignListQuery,
@@ -10,20 +10,14 @@ import {
   type PagedCampaigns,
 } from '../lib/investorCampaigns';
 
-export function ActiveCampaignsSection({
+export function ClosedCampaignsSection({
   refreshKey,
-  canBook = true,
-  onBookShares,
   onViewCompanyDetails,
 }: {
   refreshKey?: number;
-  canBook?: boolean;
-  onBookShares: (campaign: CampaignSummary) => void;
   onViewCompanyDetails: (campaign: CampaignSummary) => void;
 }) {
   const [searchInput, setSearchInput] = useState('');
-  const [industryInput, setIndustryInput] = useState('');
-  const [cityInput, setCityInput] = useState('');
   const [query, setQuery] = useState<CampaignListQuery>(emptyCampaignListQuery);
   const [items, setItems] = useState<CampaignSummary[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -32,27 +26,18 @@ export function ActiveCampaignsSection({
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setQuery((prev) => ({
-        ...prev,
-        page: 1,
-        search: searchInput,
-        industry: industryInput,
-        city: cityInput,
-      }));
+      setQuery((prev) => ({ ...prev, page: 1, search: searchInput }));
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchInput, industryInput, cityInput]);
+  }, [searchInput]);
 
   useEffect(() => {
     setLoading(true);
-    apiFetch<PagedCampaigns>(activeCampaignsUrl(query))
+    apiFetch<PagedCampaigns>(closedCampaignsUrl(query))
       .then((data) => {
         setItems(data.items);
         setTotalCount(data.totalCount);
         setTotalPages(data.totalPages);
-        if (data.totalPages > 0 && query.page > data.totalPages) {
-          setQuery((prev) => ({ ...prev, page: data.totalPages }));
-        }
       })
       .catch(() => {
         setItems([]);
@@ -64,71 +49,39 @@ export function ActiveCampaignsSection({
 
   return (
     <View className="mb-4">
-      <Text className="mb-2 font-semibold">Active campaigns ({totalCount})</Text>
-      {!canBook && (
-        <Text className="mb-2 rounded bg-amber-50 p-2 text-sm text-amber-800">
-          Your investor account is inactive. You can browse campaigns but cannot book shares.
-        </Text>
-      )}
-
+      <Text className="mb-2 font-semibold">Closed campaigns ({totalCount})</Text>
+      <Text className="mb-2 text-sm text-slate-600">Fully booked campaigns are no longer open for new bookings.</Text>
       <TextInput
         className="mb-2 rounded border border-slate-300 bg-white p-2.5"
         placeholder="Search company, industry, city…"
         value={searchInput}
         onChangeText={setSearchInput}
       />
-      <View className="mb-2 flex-row gap-2">
-        <TextInput
-          className="flex-1 rounded border border-slate-300 bg-white p-2.5"
-          placeholder="Industry"
-          value={industryInput}
-          onChangeText={setIndustryInput}
-        />
-        <TextInput
-          className="flex-1 rounded border border-slate-300 bg-white p-2.5"
-          placeholder="City"
-          value={cityInput}
-          onChangeText={setCityInput}
-        />
-      </View>
-
       {loading && <Text className="mb-2 text-sm text-slate-500">Loading…</Text>}
-
       {!loading && items.length === 0 ? (
-        <Text className="text-sm text-slate-600">No active campaigns match your filters.</Text>
+        <Text className="text-sm text-slate-600">No closed campaigns.</Text>
       ) : (
         items.map((campaign) => (
-          <View key={campaign.id} className="mb-2 rounded border bg-white p-3">
-            <Text className="font-medium">{campaign.company?.companyName ?? campaign.companyName}</Text>
-            {campaign.company?.industry ? (
-              <Text className="text-xs text-slate-500">{campaign.company.industry}</Text>
-            ) : null}
-            <Text>
-              {campaign.equityPercentageOffered}% of company · {campaign.availableShares}/{campaign.totalShares}{' '}
-              units
+          <View key={campaign.id} className="mb-2 rounded border border-slate-200 bg-slate-50 p-3">
+            <View className="mb-1 flex-row items-start justify-between gap-2">
+              <Text className="flex-1 font-medium">{campaign.company?.companyName ?? campaign.companyName}</Text>
+              <Text className="text-xs font-medium text-slate-600">Closed</Text>
+            </View>
+            <Text className="text-sm text-slate-600">
+              {campaign.equityPercentageOffered}% · all {campaign.totalShares} units booked
             </Text>
             <Text className="text-sm text-slate-600">
               {campaign.pricePerShare} BDT/share · {equityPerShare(campaign).toFixed(4)}% company/share
             </Text>
-            <View className="mt-2 flex-row gap-2">
-              <Pressable
-                className="rounded border border-slate-300 px-3 py-2"
-                onPress={() => onViewCompanyDetails(campaign)}
-              >
-                <Text className="text-sm">View details</Text>
-              </Pressable>
-              <Pressable
-                className={`rounded px-3 py-2 ${canBook ? 'bg-indigo-600' : 'bg-slate-300'}`}
-                disabled={!canBook}
-                onPress={() => onBookShares(campaign)}
-              >
-                <Text className="text-sm text-white">Book shares</Text>
-              </Pressable>
-            </View>
+            <Pressable
+              className="mt-2 self-start rounded border border-slate-300 px-3 py-2"
+              onPress={() => onViewCompanyDetails(campaign)}
+            >
+              <Text className="text-sm">View details</Text>
+            </Pressable>
           </View>
         ))
       )}
-
       {totalCount > 0 && (
         <View className="mt-2 flex-row items-center justify-between">
           <Pressable

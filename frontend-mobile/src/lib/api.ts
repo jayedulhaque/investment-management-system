@@ -40,6 +40,7 @@ export type AuthResponse = {
   email: string;
   role: string;
   userId: string;
+  isActive?: boolean;
 };
 
 export async function getStoredToken(): Promise<string | null> {

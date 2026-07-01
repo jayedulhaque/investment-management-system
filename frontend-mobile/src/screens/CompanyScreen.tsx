@@ -46,12 +46,18 @@ type Campaign = {
   id: string;
   paymentStatus: string;
   isActive: boolean;
+  isClosed?: boolean;
   equityPercentageOffered: number;
   totalShares: number;
   availableShares: number;
   pricePerShare: number;
   minInvestmentThreshold: number;
 };
+
+function isCampaignClosed(c: Campaign) {
+  if (c.isClosed) return true;
+  return c.paymentStatus === 'Paid' && !c.isActive;
+}
 
 function equityPerShare(campaign: Pick<Campaign, 'equityPercentageOffered' | 'totalShares'>) {
   return campaign.totalShares > 0 ? campaign.equityPercentageOffered / campaign.totalShares : 0;
@@ -82,6 +88,9 @@ export function CompanyScreen() {
 
   const previewEquityPerShare =
     +form.totalShares > 0 ? +form.equityPercentageOffered / +form.totalShares : 0;
+
+  const openCampaigns = campaigns.filter((c) => !isCampaignClosed(c));
+  const closedCampaigns = campaigns.filter((c) => isCampaignClosed(c));
 
   const load = useCallback(async () => {
     const campaignsData = await apiFetch<Campaign[]>('/api/campaigns/company');
@@ -400,10 +409,10 @@ export function CompanyScreen() {
       )}
       <View className="mb-4 rounded-lg bg-white p-4 shadow-sm">
         <Text className="mb-3 text-lg font-semibold">My campaign</Text>
-        {campaigns.length === 0 ? (
-          <Text className="text-sm text-slate-600">No campaign yet. Create one above.</Text>
+        {openCampaigns.length === 0 ? (
+          <Text className="text-sm text-slate-600">No open campaign. Create one above or see closed campaigns below.</Text>
         ) : (
-          campaigns.map((c) => (
+          openCampaigns.map((c) => (
             <View key={c.id} className="mb-2 rounded border border-slate-200 p-3">
               <Text className="font-medium text-indigo-900">
                 Offering {c.totalShares} shares = {c.equityPercentageOffered}% of the company
@@ -430,6 +439,23 @@ export function CompanyScreen() {
               <Pressable className="mt-3" onPress={() => deleteCampaign(c.id)}>
                 <Text className="text-sm text-red-600">Delete campaign</Text>
               </Pressable>
+            </View>
+          ))
+        )}
+      </View>
+      <View className="mb-4 rounded-lg bg-white p-4 shadow-sm">
+        <Text className="mb-3 text-lg font-semibold">Closed campaigns ({closedCampaigns.length})</Text>
+        {closedCampaigns.length === 0 ? (
+          <Text className="text-sm text-slate-600">No fully booked campaigns yet.</Text>
+        ) : (
+          closedCampaigns.map((c) => (
+            <View key={c.id} className="mb-2 rounded border border-slate-200 bg-slate-50 p-3">
+              <Text className="font-medium text-slate-900">
+                Offering {c.totalShares} shares = {c.equityPercentageOffered}% of the company
+              </Text>
+              <Text className="mt-1 text-sm text-slate-600">
+                Closed · all {c.totalShares} share units booked · {c.pricePerShare} BDT/share
+              </Text>
             </View>
           ))
         )}

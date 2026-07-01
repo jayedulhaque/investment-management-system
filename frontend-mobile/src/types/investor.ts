@@ -12,6 +12,7 @@ export type InvestorRegistrationInfo = {
 
 export type InvestorProfile = InvestorRegistrationInfo & {
   email: string;
+  isActive: boolean;
 };
 
 export const investorProfileFromRegistration = (

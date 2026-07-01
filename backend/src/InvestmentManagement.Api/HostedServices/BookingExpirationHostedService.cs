@@ -64,7 +64,7 @@ public class BookingExpirationHostedService(IServiceScopeFactory scopeFactory) :
                 $"""SELECT "Id" FROM "Campaigns" WHERE "Id" = {booking.CampaignId} FOR UPDATE""",
                 cancellationToken);
 
-            BookingService.RestoreShares(booking.Campaign, booking.ReservedShares);
+            CampaignAvailability.RestoreShares(booking.Campaign, booking.ReservedShares);
             booking.Status = BookingStatus.Cancelled;
             booking.UpdatedAt = DateTime.UtcNow;
 

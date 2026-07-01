@@ -1,23 +1,13 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Alert, Linking, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { CompanyListSection } from '../components/CompanyListSection';
+import { InvestorListSection } from '../components/InvestorListSection';
+import { AdminCampaignListSection } from '../components/AdminCampaignListSection';
+import { AdminCampaignDetailsModal } from '../components/AdminCampaignDetailsModal';
 import { apiFetch } from '../lib/api';
 import type { CompanyReview } from '../lib/adminCompanyList';
+import type { CampaignSummary } from '../lib/adminCampaigns';
 import { useAuthStore } from '../store/authStore';
-
-type Investor = {
-  userId: string;
-  email: string;
-  fullName: string;
-  phone: string;
-  nationalId: string;
-  dateOfBirth?: string | null;
-  occupation?: string | null;
-  address: string;
-  city: string;
-  country: string;
-  contactEmail?: string | null;
-};
 
 function displayValue(value?: string | null) {
   const trimmed = value?.trim();
@@ -141,22 +131,17 @@ function CompanyModal({
 
 export function AdminScreen() {
   const logout = useAuthStore((s) => s.logout);
-  const [investors, setInvestors] = useState<Investor[]>([]);
   const [listRefreshKey, setListRefreshKey] = useState(0);
   const [modalCompany, setModalCompany] = useState<CompanyReview | null>(null);
   const [modalMode, setModalMode] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [loadingCompanyDetail, setLoadingCompanyDetail] = useState(false);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
 
   const refreshCompanyLists = () => setListRefreshKey((key) => key + 1);
 
-  const loadInvestors = useCallback(async () => {
-    const investorList = await apiFetch<Investor[]>('/api/admin/investors');
-    setInvestors(investorList);
-  }, []);
-
-  useEffect(() => {
-    loadInvestors().catch(() => undefined);
-  }, [loadInvestors]);
+  const openCampaignDetail = (campaign: CampaignSummary) => {
+    setSelectedCampaignId(campaign.id);
+  };
 
   const openCompanyModal = (company: CompanyReview, mode: 'pending' | 'approved' | 'rejected') => {
     setModalMode(mode);
@@ -300,23 +285,25 @@ export function AdminScreen() {
         }
       />
 
-      <Text className="mb-2 mt-4 text-lg font-semibold">Investors ({investors.length})</Text>
-      {investors.length === 0 ? (
-        <Text className="text-sm text-slate-600">No investors registered yet.</Text>
-      ) : (
-        investors.map((i) => (
-          <View key={i.userId} className="mb-2 rounded bg-white p-3">
-            <Text className="font-medium">{i.fullName || i.email}</Text>
-            <Text className="text-xs text-slate-600">{i.email}</Text>
-            {i.phone ? <Text className="text-xs text-slate-500">Phone: {i.phone}</Text> : null}
-            {i.city && i.country ? (
-              <Text className="text-xs text-slate-500">
-                {i.city}, {i.country}
-              </Text>
-            ) : null}
-          </View>
-        ))
-      )}
+      <AdminCampaignListSection
+        mode="active"
+        refreshKey={listRefreshKey}
+        onSelectCampaign={openCampaignDetail}
+      />
+
+      <AdminCampaignListSection
+        mode="closed"
+        refreshKey={listRefreshKey}
+        onSelectCampaign={openCampaignDetail}
+      />
+
+      <AdminCampaignDetailsModal
+        campaignId={selectedCampaignId}
+        visible={selectedCampaignId !== null}
+        onClose={() => setSelectedCampaignId(null)}
+      />
+
+      <InvestorListSection refreshKey={listRefreshKey} />
     </ScrollView>
   );
 }

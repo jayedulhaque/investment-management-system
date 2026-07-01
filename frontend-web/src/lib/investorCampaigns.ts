@@ -10,6 +10,9 @@ export type CampaignSummary = {
   minInvestmentThreshold: number;
   totalShares: number;
   equityPercentageOffered: number;
+  paymentStatus?: string;
+  isActive?: boolean;
+  isClosed?: boolean;
 };
 
 export type PagedCampaigns = {
@@ -46,6 +49,21 @@ export function activeCampaignsUrl(query: CampaignListQuery) {
   if (query.industry.trim()) params.set('industry', query.industry.trim());
   if (query.city.trim()) params.set('city', query.city.trim());
   return `/api/campaigns?${params.toString()}`;
+}
+
+export function closedCampaignsUrl(query: CampaignListQuery) {
+  const params = new URLSearchParams();
+  params.set('page', String(query.page));
+  params.set('pageSize', String(query.pageSize));
+  if (query.search.trim()) params.set('search', query.search.trim());
+  if (query.industry.trim()) params.set('industry', query.industry.trim());
+  if (query.city.trim()) params.set('city', query.city.trim());
+  return `/api/campaigns/closed?${params.toString()}`;
+}
+
+export function isCampaignClosed(campaign: Pick<CampaignSummary, 'paymentStatus' | 'isActive' | 'isClosed'>) {
+  if (campaign.isClosed) return true;
+  return campaign.paymentStatus === 'Paid' && campaign.isActive === false;
 }
 
 export function equityPerShare(campaign: Pick<CampaignSummary, 'equityPercentageOffered' | 'totalShares'>) {

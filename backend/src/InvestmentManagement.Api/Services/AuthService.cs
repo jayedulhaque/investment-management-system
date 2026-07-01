@@ -134,7 +134,8 @@ public class AuthService(
             ExpiresAt = expiresAt,
             Email = user.Email,
             Role = user.Role.ToString(),
-            UserId = user.Id
+            UserId = user.Id,
+            IsActive = user.IsActive
         };
     }
 

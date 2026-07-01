@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   calculateTotalPrice,
   clampShares,
@@ -20,38 +20,69 @@ export function ShareCalculator({
   onSubmit,
   submitLabel = 'Book shares',
 }: Props) {
-  const [shares, setShares] = useState(1);
+  const [shareInput, setShareInput] = useState('1');
 
-  const safeShares = clampShares(shares, maxShares);
+  useEffect(() => {
+    setShareInput('1');
+  }, [maxShares, pricePerShare, minInvestmentThreshold]);
+
+  const parsed = parseInt(shareInput, 10);
+  const safeShares = clampShares(Number.isNaN(parsed) ? 1 : parsed, maxShares);
   const totalPrice = useMemo(
     () => calculateTotalPrice(safeShares, pricePerShare),
     [safeShares, pricePerShare],
   );
   const canSubmit = meetsMinThreshold(totalPrice, minInvestmentThreshold) && maxShares > 0;
 
+  const setShares = (value: number) => {
+    const clamped = clampShares(value, maxShares);
+    setShareInput(String(clamped));
+  };
+
+  const handleInputChange = (value: string) => {
+    setShareInput(value.replace(/\D/g, ''));
+  };
+
+  const handleInputBlur = () => {
+    setShareInput(String(safeShares));
+  };
+
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
       <h3 className="mb-3 font-semibold text-slate-800">Share calculator</h3>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
           className="h-9 w-9 rounded bg-white border border-slate-300 text-lg"
-          onClick={() => setShares((s) => clampShares(s - 1, maxShares))}
+          onClick={() => setShares(safeShares - 1)}
           disabled={safeShares <= 1}
         >
           −
         </button>
-        <span className="min-w-[3rem] text-center font-mono text-lg">{safeShares}</span>
+        <label className="flex flex-col text-sm text-slate-600">
+          <span className="mb-1 text-xs">Shares</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={shareInput}
+            onChange={(e) => handleInputChange(e.target.value)}
+            onBlur={handleInputBlur}
+            className="w-24 rounded border border-slate-300 bg-white px-2 py-1.5 text-center font-mono text-lg"
+            aria-label="Number of shares to book"
+          />
+        </label>
         <button
           type="button"
           className="h-9 w-9 rounded bg-white border border-slate-300 text-lg"
-          onClick={() => setShares((s) => clampShares(s + 1, maxShares))}
+          onClick={() => setShares(safeShares + 1)}
           disabled={safeShares >= maxShares}
         >
           +
         </button>
         <span className="text-sm text-slate-600">× {pricePerShare.toFixed(2)} BDT</span>
       </div>
+      <p className="mt-1 text-xs text-slate-500">Max available: {maxShares} shares</p>
       <p className="mt-3 text-sm">
         Total: <strong>{totalPrice.toFixed(2)} BDT</strong>
         <span className="text-slate-500"> (min. {minInvestmentThreshold.toFixed(2)} BDT)</span>

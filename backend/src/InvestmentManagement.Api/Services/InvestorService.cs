@@ -19,7 +19,7 @@ public class InvestorService(ApplicationDbContext db) : IInvestorService
 
         var profile = user.InvestorProfile ?? await CreateDefaultProfileAsync(user, cancellationToken);
 
-        return MapProfile(user.Email, profile);
+        return MapProfile(user.Email, user.IsActive, profile);
     }
 
     public async Task UpdateProfileAsync(
@@ -91,10 +91,14 @@ public class InvestorService(ApplicationDbContext db) : IInvestorService
         return profile;
     }
 
-    private static InvestorProfileResponse MapProfile(string email, Domain.Entities.InvestorProfile profile) =>
+    private static InvestorProfileResponse MapProfile(
+        string email,
+        bool isActive,
+        Domain.Entities.InvestorProfile profile) =>
         new()
         {
             Email = email,
+            IsActive = isActive,
             FullName = profile.FullName,
             Phone = profile.Phone,
             NationalId = profile.NationalId,

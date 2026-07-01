@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using InvestmentManagement.Api.Contracts.Admin;
+using InvestmentManagement.Api.Contracts.Campaigns;
 using InvestmentManagement.Api.Contracts.Common;
 using InvestmentManagement.Api.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -73,10 +74,67 @@ public class AdminController(IAdminService adminService) : ControllerBase
     }
 
     [HttpGet("investors")]
-    [ProducesResponseType(typeof(IReadOnlyList<InvestorSummaryResponse>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<InvestorSummaryResponse>>> GetInvestors(CancellationToken cancellationToken)
+    [ProducesResponseType(typeof(PagedResponse<InvestorSummaryResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PagedResponse<InvestorSummaryResponse>>> GetInvestors(
+        [FromQuery] InvestorListQuery query,
+        CancellationToken cancellationToken)
     {
-        return Ok(await adminService.GetInvestorsAsync(cancellationToken));
+        return Ok(await adminService.GetInvestorsAsync(query, cancellationToken));
+    }
+
+    [HttpGet("investors/{id:guid}")]
+    [ProducesResponseType(typeof(InvestorDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<InvestorDetailResponse>> GetInvestor(Guid id, CancellationToken cancellationToken)
+    {
+        var investor = await adminService.GetInvestorByIdAsync(id, cancellationToken);
+        return investor is null ? NotFound() : Ok(investor);
+    }
+
+    [HttpPut("investors/{id:guid}/active")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetInvestorActiveStatus(
+        Guid id,
+        [FromBody] UpdateInvestorActiveStatusRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await adminService.SetInvestorActiveStatusAsync(id, request.IsActive, cancellationToken);
+            return NoContent();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
+
+    [HttpGet("campaigns/active")]
+    [ProducesResponseType(typeof(PagedResponse<CampaignResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PagedResponse<CampaignResponse>>> GetActiveCampaigns(
+        [FromQuery] ActiveCampaignListQuery query,
+        CancellationToken cancellationToken)
+    {
+        return Ok(await adminService.GetActiveCampaignsAsync(query, cancellationToken));
+    }
+
+    [HttpGet("campaigns/closed")]
+    [ProducesResponseType(typeof(PagedResponse<CampaignResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PagedResponse<CampaignResponse>>> GetClosedCampaigns(
+        [FromQuery] ActiveCampaignListQuery query,
+        CancellationToken cancellationToken)
+    {
+        return Ok(await adminService.GetClosedCampaignsAsync(query, cancellationToken));
+    }
+
+    [HttpGet("campaigns/{id:guid}")]
+    [ProducesResponseType(typeof(AdminCampaignDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<AdminCampaignDetailResponse>> GetCampaign(Guid id, CancellationToken cancellationToken)
+    {
+        var campaign = await adminService.GetCampaignByIdAsync(id, cancellationToken);
+        return campaign is null ? NotFound() : Ok(campaign);
     }
 
     [HttpPost("companies/{id:guid}/approve")]

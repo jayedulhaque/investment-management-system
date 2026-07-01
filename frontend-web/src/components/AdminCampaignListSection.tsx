@@ -1,27 +1,50 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '../lib/api';
 import {
-  activeCampaignsUrl,
+  adminActiveCampaignsUrl,
+  adminClosedCampaignsUrl,
   emptyCampaignListQuery,
-  equityPerShare,
   type CampaignListQuery,
   type CampaignSummary,
   type PagedCampaigns,
-} from '../lib/investorCampaigns';
+} from '../lib/adminCampaigns';
+import { equityPerShare } from '../lib/investorCampaigns';
 
-export function ActiveCampaignsSection({
+type Mode = 'active' | 'closed';
+
+const config: Record<
+  Mode,
+  { title: string; description: string; emptyMessage: string; badge: string; badgeClass: string }
+> = {
+  active: {
+    title: 'Active campaigns',
+    description: 'Paid campaigns currently open for investment.',
+    emptyMessage: 'No active campaigns.',
+    badge: 'Active',
+    badgeClass: 'bg-green-100 text-green-800',
+  },
+  closed: {
+    title: 'Closed campaigns',
+    description: 'Paid campaigns where all shares have been booked.',
+    emptyMessage: 'No closed campaigns.',
+    badge: 'Closed',
+    badgeClass: 'bg-slate-200 text-slate-700',
+  },
+};
+
+export function AdminCampaignListSection({
+  mode,
   refreshKey,
-  canBook = true,
-  onBookShares,
-  onViewCompanyDetails,
+  onSelectCampaign,
 }: {
-  refreshKey?: number;
-  canBook?: boolean;
-  onBookShares: (campaign: CampaignSummary) => void;
-  onViewCompanyDetails: (campaign: CampaignSummary) => void;
+  mode: Mode;
+  refreshKey: number;
+  onSelectCampaign: (campaign: CampaignSummary) => void;
 }) {
+  const { title, description, emptyMessage, badge, badgeClass } = config[mode];
+  const listUrl = mode === 'active' ? adminActiveCampaignsUrl : adminClosedCampaignsUrl;
+
   const [searchInput, setSearchInput] = useState('');
-  const [industryInput, setIndustryInput] = useState('');
   const [cityInput, setCityInput] = useState('');
   const [query, setQuery] = useState<CampaignListQuery>(emptyCampaignListQuery);
   const [items, setItems] = useState<CampaignSummary[]>([]);
@@ -35,16 +58,15 @@ export function ActiveCampaignsSection({
         ...prev,
         page: 1,
         search: searchInput,
-        industry: industryInput,
         city: cityInput,
       }));
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchInput, industryInput, cityInput]);
+  }, [searchInput, cityInput]);
 
   useEffect(() => {
     setLoading(true);
-    apiFetch<PagedCampaigns>(activeCampaignsUrl(query))
+    apiFetch<PagedCampaigns>(listUrl(query))
       .then((data) => {
         setItems(data.items);
         setTotalCount(data.totalCount);
@@ -59,21 +81,19 @@ export function ActiveCampaignsSection({
         setTotalPages(0);
       })
       .finally(() => setLoading(false));
-  }, [query, refreshKey]);
+  }, [query, refreshKey, mode]);
 
   const rangeStart = totalCount === 0 ? 0 : (query.page - 1) * query.pageSize + 1;
   const rangeEnd = Math.min(query.page * query.pageSize, totalCount);
 
   return (
     <section>
-      <h2 className="mb-3 font-semibold">Active campaigns ({totalCount})</h2>
-      {!canBook && (
-        <p className="mb-3 rounded bg-amber-50 p-2 text-sm text-amber-800">
-          Your investor account is inactive. You can browse campaigns but cannot book shares.
-        </p>
-      )}
+      <h2 className="mb-3 font-semibold">
+        {title} ({totalCount})
+      </h2>
+      <p className="mb-3 text-sm text-slate-600">{description}</p>
 
-      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end">
         <label className="block flex-1 text-sm">
           <span className="mb-1 block text-slate-600">Search</span>
           <input
@@ -81,16 +101,6 @@ export function ActiveCampaignsSection({
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Company name, industry, city…"
-            className="w-full rounded border px-2 py-1.5"
-          />
-        </label>
-        <label className="block w-full text-sm sm:w-40">
-          <span className="mb-1 block text-slate-600">Industry</span>
-          <input
-            type="text"
-            value={industryInput}
-            onChange={(e) => setIndustryInput(e.target.value)}
-            placeholder="Filter by industry"
             className="w-full rounded border px-2 py-1.5"
           />
         </label>
@@ -127,48 +137,33 @@ export function ActiveCampaignsSection({
       {loading && <p className="mb-2 text-sm text-slate-500">Loading…</p>}
 
       {!loading && items.length === 0 ? (
-        <p className="text-sm text-slate-600">No active campaigns match your filters.</p>
+        <p className="text-sm text-slate-600">{emptyMessage}</p>
       ) : (
-        <div className="grid gap-3">
+        <ul className="space-y-2">
           {items.map((campaign) => (
-            <div key={campaign.id} className="rounded-lg border bg-white p-4">
-              <p className="font-medium">{campaign.company?.companyName ?? campaign.companyName}</p>
-              {campaign.company?.industry && (
-                <p className="text-xs text-slate-500">{campaign.company.industry}</p>
-              )}
-              {(campaign.company?.city || campaign.company?.country) && (
-                <p className="text-xs text-slate-500">
-                  {[campaign.company?.city, campaign.company?.country].filter(Boolean).join(', ')}
+            <li key={campaign.id}>
+              <button
+                type="button"
+                onClick={() => onSelectCampaign(campaign)}
+                className="w-full rounded border bg-slate-50 p-3 text-left text-sm transition hover:border-indigo-300 hover:bg-indigo-50/50"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-medium">{campaign.company?.companyName ?? campaign.companyName}</p>
+                  <span className={`rounded px-2 py-0.5 text-xs ${badgeClass}`}>{badge}</span>
+                </div>
+                <p className="mt-1 text-xs text-slate-600">{campaign.company?.industry ?? '—'}</p>
+                <p className="text-slate-600">
+                  {campaign.totalShares} shares · {campaign.equityPercentageOffered}% equity ·{' '}
+                  {equityPerShare(campaign).toFixed(4)}% per share
                 </p>
-              )}
-              <p className="mt-1 text-sm text-slate-600">
-                {campaign.equityPercentageOffered}% of company · {campaign.availableShares} /{' '}
-                {campaign.totalShares} share units
-              </p>
-              <p className="text-sm text-slate-600">
-                {campaign.pricePerShare} BDT/share · min {campaign.minInvestmentThreshold} BDT ·{' '}
-                {equityPerShare(campaign).toFixed(4)}% company per share
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="rounded border px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-                  onClick={() => onViewCompanyDetails(campaign)}
-                >
-                  View company details
-                </button>
-                <button
-                  type="button"
-                  disabled={!canBook}
-                  className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={() => onBookShares(campaign)}
-                >
-                  Book shares
-                </button>
-              </div>
-            </div>
+                <p className="text-slate-600">
+                  {campaign.pricePerShare} BDT/share ·{' '}
+                  {mode === 'closed' ? 'fully booked' : `${campaign.availableShares} available`}
+                </p>
+              </button>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
 
       {totalCount > 0 && (
@@ -181,7 +176,7 @@ export function ActiveCampaignsSection({
               type="button"
               disabled={query.page <= 1 || loading}
               onClick={() => setQuery((prev) => ({ ...prev, page: prev.page - 1 }))}
-              className="rounded border bg-white px-3 py-1 text-sm disabled:opacity-40"
+              className="rounded border px-3 py-1 text-sm disabled:opacity-40"
             >
               Previous
             </button>
@@ -192,7 +187,7 @@ export function ActiveCampaignsSection({
               type="button"
               disabled={query.page >= totalPages || loading}
               onClick={() => setQuery((prev) => ({ ...prev, page: prev.page + 1 }))}
-              className="rounded border bg-white px-3 py-1 text-sm disabled:opacity-40"
+              className="rounded border px-3 py-1 text-sm disabled:opacity-40"
             >
               Next
             </button>

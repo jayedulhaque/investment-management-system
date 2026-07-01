@@ -22,6 +22,16 @@ public class CampaignsController(ICampaignService campaignService) : ControllerB
         return Ok(await campaignService.GetActiveCampaignsAsync(query, cancellationToken));
     }
 
+    [HttpGet("closed")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(PagedResponse<CampaignResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PagedResponse<CampaignResponse>>> GetClosed(
+        [FromQuery] ActiveCampaignListQuery query,
+        CancellationToken cancellationToken)
+    {
+        return Ok(await campaignService.GetClosedCampaignsAsync(query, cancellationToken));
+    }
+
     [HttpGet("company")]
     [Authorize(Policy = "CompanyOnly")]
     [ProducesResponseType(typeof(IReadOnlyList<CampaignResponse>), StatusCodes.Status200OK)]

@@ -39,6 +39,13 @@ public class BookingService(ApplicationDbContext db) : IBookingService
         if (!campaign.IsActive || campaign.PaymentStatus != PaymentStatus.Paid)
             throw new InvalidOperationException("Campaign is not active.");
 
+        var investor = await db.Users.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Id == investorId && u.Role == UserRole.Investor, cancellationToken)
+            ?? throw new UnauthorizedAccessException("Investor user not found.");
+
+        if (!investor.IsActive)
+            throw new InvalidOperationException("Your investor account is inactive. You cannot book shares.");
+
         var activeCount = await db.Bookings.CountAsync(
             b => b.InvestorId == investorId && ActiveBookingStatuses.Contains(b.Status),
             cancellationToken);
@@ -54,7 +61,7 @@ public class BookingService(ApplicationDbContext db) : IBookingService
             throw new InvalidOperationException(
                 $"Total order value {totalPrice:0.00} is below minimum threshold {campaign.MinInvestmentThreshold:0.00}.");
 
-        campaign.AvailableShares -= request.ReservedShares;
+        CampaignAvailability.ApplyShareReservation(campaign, request.ReservedShares);
 
         var now = DateTime.UtcNow;
         var booking = new Booking
@@ -99,7 +106,7 @@ public class BookingService(ApplicationDbContext db) : IBookingService
             $"""SELECT "Id" FROM "Campaigns" WHERE "Id" = {booking.CampaignId} FOR UPDATE""",
             cancellationToken);
 
-        RestoreShares(booking.Campaign, booking.ReservedShares);
+        CampaignAvailability.RestoreShares(booking.Campaign, booking.ReservedShares);
         booking.Status = BookingStatus.Cancelled;
         booking.UpdatedAt = DateTime.UtcNow;
 
@@ -185,7 +192,7 @@ public class BookingService(ApplicationDbContext db) : IBookingService
             $"""SELECT "Id" FROM "Campaigns" WHERE "Id" = {booking.CampaignId} FOR UPDATE""",
             cancellationToken);
 
-        RestoreShares(booking.Campaign, booking.ReservedShares);
+        CampaignAvailability.RestoreShares(booking.Campaign, booking.ReservedShares);
         booking.Status = BookingStatus.Returned;
         booking.UpdatedAt = DateTime.UtcNow;
 
@@ -399,10 +406,6 @@ public class BookingService(ApplicationDbContext db) : IBookingService
                  b.Investor.InvestorProfile.ContactEmail.ToLower().Contains(term)))));
     }
 
-    internal static void RestoreShares(Campaign campaign, int shares)
-    {
-        campaign.AvailableShares = Math.Min(campaign.TotalShares, campaign.AvailableShares + shares);
-    }
 
     private static void ValidateCompanyTransition(BookingStatus current, BookingStatus target)
     {

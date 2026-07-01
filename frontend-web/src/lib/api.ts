@@ -39,6 +39,7 @@ export type AuthResponse = {
   email: string;
   role: string;
   userId: string;
+  isActive?: boolean;
 };
 
 export function getStoredToken(): string | null {

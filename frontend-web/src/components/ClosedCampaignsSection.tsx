@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '../lib/api';
 import {
-  activeCampaignsUrl,
+  closedCampaignsUrl,
   emptyCampaignListQuery,
   equityPerShare,
   type CampaignListQuery,
@@ -9,15 +9,11 @@ import {
   type PagedCampaigns,
 } from '../lib/investorCampaigns';
 
-export function ActiveCampaignsSection({
+export function ClosedCampaignsSection({
   refreshKey,
-  canBook = true,
-  onBookShares,
   onViewCompanyDetails,
 }: {
   refreshKey?: number;
-  canBook?: boolean;
-  onBookShares: (campaign: CampaignSummary) => void;
   onViewCompanyDetails: (campaign: CampaignSummary) => void;
 }) {
   const [searchInput, setSearchInput] = useState('');
@@ -44,7 +40,7 @@ export function ActiveCampaignsSection({
 
   useEffect(() => {
     setLoading(true);
-    apiFetch<PagedCampaigns>(activeCampaignsUrl(query))
+    apiFetch<PagedCampaigns>(closedCampaignsUrl(query))
       .then((data) => {
         setItems(data.items);
         setTotalCount(data.totalCount);
@@ -66,12 +62,8 @@ export function ActiveCampaignsSection({
 
   return (
     <section>
-      <h2 className="mb-3 font-semibold">Active campaigns ({totalCount})</h2>
-      {!canBook && (
-        <p className="mb-3 rounded bg-amber-50 p-2 text-sm text-amber-800">
-          Your investor account is inactive. You can browse campaigns but cannot book shares.
-        </p>
-      )}
+      <h2 className="mb-3 font-semibold">Closed campaigns ({totalCount})</h2>
+      <p className="mb-3 text-sm text-slate-600">Fully booked campaigns are no longer open for new bookings.</p>
 
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
         <label className="block flex-1 text-sm">
@@ -127,43 +119,34 @@ export function ActiveCampaignsSection({
       {loading && <p className="mb-2 text-sm text-slate-500">Loading…</p>}
 
       {!loading && items.length === 0 ? (
-        <p className="text-sm text-slate-600">No active campaigns match your filters.</p>
+        <p className="text-sm text-slate-600">No closed campaigns match your filters.</p>
       ) : (
         <div className="grid gap-3">
           {items.map((campaign) => (
-            <div key={campaign.id} className="rounded-lg border bg-white p-4">
-              <p className="font-medium">{campaign.company?.companyName ?? campaign.companyName}</p>
+            <div key={campaign.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <p className="font-medium">{campaign.company?.companyName ?? campaign.companyName}</p>
+                <span className="shrink-0 rounded bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700">
+                  Closed
+                </span>
+              </div>
               {campaign.company?.industry && (
                 <p className="text-xs text-slate-500">{campaign.company.industry}</p>
               )}
-              {(campaign.company?.city || campaign.company?.country) && (
-                <p className="text-xs text-slate-500">
-                  {[campaign.company?.city, campaign.company?.country].filter(Boolean).join(', ')}
-                </p>
-              )}
               <p className="mt-1 text-sm text-slate-600">
-                {campaign.equityPercentageOffered}% of company · {campaign.availableShares} /{' '}
-                {campaign.totalShares} share units
+                {campaign.equityPercentageOffered}% of company · {campaign.totalShares} / {campaign.totalShares}{' '}
+                share units booked
               </p>
               <p className="text-sm text-slate-600">
-                {campaign.pricePerShare} BDT/share · min {campaign.minInvestmentThreshold} BDT ·{' '}
-                {equityPerShare(campaign).toFixed(4)}% company per share
+                {campaign.pricePerShare} BDT/share · {equityPerShare(campaign).toFixed(4)}% company per share
               </p>
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-3">
                 <button
                   type="button"
-                  className="rounded border px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                  className="rounded border px-3 py-1.5 text-sm text-slate-700 hover:bg-white"
                   onClick={() => onViewCompanyDetails(campaign)}
                 >
                   View company details
-                </button>
-                <button
-                  type="button"
-                  disabled={!canBook}
-                  className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={() => onBookShares(campaign)}
-                >
-                  Book shares
                 </button>
               </div>
             </div>

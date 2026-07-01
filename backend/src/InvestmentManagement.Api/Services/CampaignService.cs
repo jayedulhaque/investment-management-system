@@ -122,6 +122,35 @@ public class CampaignService(
         };
     }
 
+    public async Task<PagedResponse<CampaignResponse>> GetClosedCampaignsAsync(
+        ActiveCampaignListQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        var (page, pageSize) = NormalizePaging(query);
+        var filtered = ApplyCampaignListFilters(
+            db.Campaigns
+                .AsNoTracking()
+                .Include(c => c.CompanyProfile)
+                .Where(c => c.PaymentStatus == PaymentStatus.Paid && !c.IsActive),
+            query);
+
+        var totalCount = await filtered.CountAsync(cancellationToken);
+        var campaigns = await filtered
+            .OrderByDescending(c => c.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return new PagedResponse<CampaignResponse>
+        {
+            Items = campaigns.Select(c => MapCampaign(c)).ToList(),
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = totalCount,
+            TotalPages = totalCount == 0 ? 0 : (int)Math.Ceiling(totalCount / (double)pageSize)
+        };
+    }
+
     public async Task<IReadOnlyList<CampaignResponse>> GetCompanyCampaignsAsync(
         Guid companyUserId,
         CancellationToken cancellationToken = default)
@@ -239,7 +268,8 @@ public class CampaignService(
             MinInvestmentThreshold = c.MinInvestmentThreshold,
             PaymentStatus = c.PaymentStatus.ToString(),
             BKashTransactionId = c.BKashTransactionId,
-            IsActive = c.IsActive
+            IsActive = c.IsActive,
+            IsClosed = CampaignAvailability.IsClosed(c)
         };
     }
 

@@ -14,4 +14,5 @@ public class CampaignResponse
     public string PaymentStatus { get; set; } = string.Empty;
     public string? BKashTransactionId { get; set; }
     public bool IsActive { get; set; }
+    public bool IsClosed { get; set; }
 }

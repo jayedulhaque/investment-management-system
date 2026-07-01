@@ -20,12 +20,18 @@ type Campaign = {
   id: string;
   paymentStatus: string;
   isActive: boolean;
+  isClosed?: boolean;
   equityPercentageOffered: number;
   totalShares: number;
   availableShares: number;
   pricePerShare: number;
   minInvestmentThreshold: number;
 };
+
+function isCampaignClosed(c: Campaign) {
+  if (c.isClosed) return true;
+  return c.paymentStatus === 'Paid' && !c.isActive;
+}
 
 function equityPerShare(campaign: Pick<Campaign, 'equityPercentageOffered' | 'totalShares'>) {
   return campaign.totalShares > 0 ? campaign.equityPercentageOffered / campaign.totalShares : 0;
@@ -61,6 +67,9 @@ export function CompanyPage() {
 
   const formPreview = campaignStakeSummary(form);
   const formEquityPerShare = equityPerShare(form);
+
+  const openCampaigns = campaigns.filter((c) => !isCampaignClosed(c));
+  const closedCampaigns = campaigns.filter((c) => isCampaignClosed(c));
 
   const loadCampaigns = () =>
     apiFetch<Campaign[]>('/api/campaigns/company').then(setCampaigns);
@@ -341,11 +350,11 @@ export function CompanyPage() {
 
       <section>
         <h2 className="mb-3 font-semibold">My campaign</h2>
-        {campaigns.length === 0 ? (
-          <p className="text-sm text-slate-600">No campaign yet. Create one above.</p>
+        {openCampaigns.length === 0 ? (
+          <p className="text-sm text-slate-600">No open campaign. Create one above or see closed campaigns below.</p>
         ) : (
           <ul className="space-y-2">
-            {campaigns.map((c) => (
+            {openCampaigns.map((c) => (
               <li key={c.id} className="rounded border bg-white p-3 text-sm">
                 <p className="font-medium text-indigo-900">{campaignStakeSummary(c)}</p>
                 <p className="mt-1">
@@ -382,6 +391,27 @@ export function CompanyPage() {
                 >
                   Delete campaign
                 </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section>
+        <h2 className="mb-3 font-semibold">Closed campaigns ({closedCampaigns.length})</h2>
+        {closedCampaigns.length === 0 ? (
+          <p className="text-sm text-slate-600">No fully booked campaigns yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {closedCampaigns.map((c) => (
+              <li key={c.id} className="rounded border border-slate-200 bg-slate-50 p-3 text-sm">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-medium text-slate-900">{campaignStakeSummary(c)}</p>
+                  <span className="rounded bg-slate-200 px-2 py-0.5 text-xs text-slate-700">Closed</span>
+                </div>
+                <p className="mt-1 text-slate-600">
+                  All {c.totalShares} share units booked · {c.pricePerShare} BDT/share
+                </p>
               </li>
             ))}
           </ul>

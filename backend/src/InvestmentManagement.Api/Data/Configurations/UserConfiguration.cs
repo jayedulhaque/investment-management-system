@@ -29,6 +29,10 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
             .HasMaxLength(32)
             .IsRequired();
 
+        builder.Property(u => u.IsActive)
+            .HasDefaultValue(true)
+            .IsRequired();
+
         builder.Property(u => u.BKashNumber)
             .HasMaxLength(20);
 
